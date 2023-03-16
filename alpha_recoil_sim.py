@@ -221,8 +221,6 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
 
     ### radius along the trajectory
     is_stopped, cross, final_domain = check_is_stopped(curr_traj, rin, rout)
-
-    print("initial traj check: ", is_stopped, cross, final_domain)
     
     while not is_stopped:
 
@@ -249,8 +247,6 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
 
         ##check if this new traj is stopped or not        
         is_stopped, cross, final_domain = check_is_stopped(curr_traj, rin, rout)
-            
-        print("following traj check: ", is_stopped, cross, final_domain)
 
     ## now that we're stopped, add the last bit of trajectory
     if(len(final_traj)>0):
@@ -262,7 +258,7 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
 
 def plot_trajectory(data, rin, rout):
     # Create a 3D plot
-    fig = plt.figure(figsize=(12,3))
+    fig = plt.figure(figsize=(12,3), facecolor='white')
     #ax = fig.add_subplot(141, projection='3d')
 
     ## Plot the array in 3D
@@ -322,12 +318,13 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
 
     decay_dict = iso_dict[iso]
 
+    output_record = {}
+
     for n in range(nmc):
 
         curr_iso = iso ## starting isotope at top of chain
         t = 0 ## start at time zero
         x, y, z = random_point_in_sphere(r_inner)
-        print(x,y,z)
         curr_mat = mat_inner
         curr_t12 = decay_dict[curr_iso + "_t12"] ## get this to start the while loop
 
@@ -358,6 +355,15 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             decay_record['energy'] = decay_NR_energy
             decay_record['iso'] = decay_daughter
 
+            if(decay_alpha_energy == 0): ## this is actually a beta decay, so we don't need to simulate anything
+                ### update to the new isotope and t12
+                curr_iso = decay_daughter
+                curr_t12 = decay_dict[curr_iso + "_t12"]
+                ## save the data
+                event_record[decay_idx] = decay_record
+                decay_idx += 1    
+                continue   
+
             traj_dict = MC_dict[decay_daughter + '_' + curr_mat]
 
             ### get a random trajectory for its recoil
@@ -372,11 +378,26 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             final_traj, final_domain = follow_trajectory(shortened_traj, r_inner, r_outer, 
                                                          traj_dict_inner, traj_dict_outer, NUM_SRIM_TRAJ)
 
-            plot_trajectory(final_traj, r_inner, r_outer)
-            break
+            #plot_trajectory(final_traj, r_inner, r_outer)
+
+            decay_record['traj'] = final_traj
+            decay_record['final_domain'] = final_domain
+            ## update position to end of trajectory
+            x, y, z = final_traj[-1, 1], final_traj[-1, 2], final_traj[-1, 3]
 
             ### update to the new isotope and t12
             curr_iso = decay_daughter
             curr_t12 = decay_dict[curr_iso + "_t12"]
 
+            ## make sure to break if we've exited the sphere
+            if(final_domain == 2):
+                curr_t12 = -1
+
+            ## save the data
+            event_record[decay_idx] = decay_record
+            decay_idx += 1
+
+        output_record[n] = event_record
+
+    return output_record
 
