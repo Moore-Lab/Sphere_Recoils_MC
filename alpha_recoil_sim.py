@@ -81,22 +81,23 @@ def random_angle_on_sphere():
     psi = 2 * np.pi * w
     return psi, theta, phi
 
-def rotate_3d_data(points, euler_angles):
+def rotate_3d_data(points, euler_angles, R=[]):
     ## take a set of points in 3d (3 column array) and rotate them by some euler angles
 
-    Rx = np.array([[1, 0, 0],
-                [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
-                [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
+    if(len(euler_angles)>0):
+        Rx = np.array([[1, 0, 0],
+                    [0, np.cos(euler_angles[0]), -np.sin(euler_angles[0])],
+                    [0, np.sin(euler_angles[0]), np.cos(euler_angles[0])]])
 
-    Ry = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
-                [0, 1, 0],
-                [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
+        Ry = np.array([[np.cos(euler_angles[1]), 0, np.sin(euler_angles[1])],
+                    [0, 1, 0],
+                    [-np.sin(euler_angles[1]), 0, np.cos(euler_angles[1])]])
 
-    Rz = np.array([[np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
-                [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
-                [0, 0, 1]])
+        Rz = np.array([[np.cos(euler_angles[2]), -np.sin(euler_angles[2]), 0],
+                    [np.sin(euler_angles[2]), np.cos(euler_angles[2]), 0],
+                    [0, 0, 1]])
 
-    R = Rz @ Ry @ Rx
+        R = Rz @ Ry @ Rx
 
     rotated_points = np.dot(R, points.T).T
 
@@ -154,15 +155,10 @@ def select_end_of_traj(traj_full, energy, rotate_to_match, init_xyz, prior_traj=
         shortened_traj[:,xyzidx] -= shortened_traj[0,xyzidx]
 
     if(rotate_to_match): ### rotate this to match the end of the prior trajectory
-        vec2 = 1.0*shortened_traj[1,1:4] ## new direction
-        vec1 = prior_traj[-1,1:4]-prior_traj[-2,1:4] ## initial direction
-        rotation_angles = get_euler_for_two_traj(vec1, vec2)
-        shortened_traj[:,1:4] = rotate_3d_data(shortened_traj[:,1:4], rotation_angles)
-
-        print("Initial traj: ", vec1/np.linalg.norm(vec1))
-        print("New traj before rot: ", vec2/np.linalg.norm(vec2))
-        print("rotation angles: ", rotation_angles)
-        print("New traj after rot:", shortened_traj[1,:]/shortened_traj[1,:])
+        vec1 = 1.0*shortened_traj[1,1:4] ## new direction (want to rotate this back to initial)
+        vec2 = prior_traj[-1,1:4]-prior_traj[-2,1:4] ## initial direction
+        R = get_euler_for_two_traj(vec2, vec1)
+        shortened_traj[:,1:4] = rotate_3d_data(shortened_traj[:,1:4], [], R)
 
     else: ### choose a random angle for that trajectory
         shortened_traj[:,1:4] = rotate_3d_data(shortened_traj[:,1:4], random_angle_on_sphere())  
@@ -202,19 +198,19 @@ def check_is_stopped(traj, rin, rout):
 
 def get_euler_for_two_traj(vec1, vec2):
 
-    cos_theta = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
-    theta = np.arccos(cos_theta)
+    ct = np.dot(vec1, vec2) / (np.linalg.norm(vec1) * np.linalg.norm(vec2))
+    st = np.sqrt(1 - ct**2)
 
     # Find the axis of rotation using the cross product
-    axis = np.cross(vec1, vec2)
-    axis = axis / np.linalg.norm(axis)   # normalize the axis vector
+    u = -np.cross(vec1, vec2) ## minus to do inverse rotation
+    u = u / np.linalg.norm(u)   # normalize the axis vector
+    ux, uy, uz = u[0], u[1], u[2]
 
-    # Choose a rotation sequence (XYZ or ZYX) and calculate the Euler angles
-    yaw = np.arctan2(axis[1]*np.sin(theta) + axis[0]*axis[2]*(1-np.cos(theta)), 1-axis[0]**2*np.cos(theta) - axis[1]**2*np.cos(theta))
-    pitch = np.arcsin(-axis[0]*np.sin(theta) + axis[1]*axis[2]*(1-np.cos(theta)))
-    roll = np.arctan2(axis[0]*np.sin(theta) + axis[1]*axis[2]*(1-np.cos(theta)), 1-axis[1]**2*np.cos(theta) - axis[2]**2*np.cos(theta))
+    R = [[ct + ux**2 * (1-ct), ux*uy*(1-ct)-uz*st, ux*uz*(1-ct) + uy*st],
+         [uy*ux*(1-ct) + uz*st, ct + uy**2*(1-ct), uy*uz*(1-ct) - ux*st],
+         [uz*ux*(1-ct) - uy*st, uz*uy*(1-ct) + ux*st, ct + uz**2*(1-ct)]]
 
-    return np.array([roll, pitch, yaw])
+    return np.array(R)
 
 def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRAJ):
     """ Follows a trajectory back and forth until it ends in the same domain
