@@ -278,7 +278,7 @@ def plot_sphere(ax, r, c, alph=0.5):
 
 def plot_event(event_dict, sd):
 
-    color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y']
+    color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y', 'orange', 'purple']
     c1_list = [1,2,1]
     c2_list = [2,3,3]
 
@@ -309,8 +309,11 @@ def plot_event(event_dict, sd):
     for j,ax in enumerate(ax2d[:-1]):
         ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0])
     ax2d[-1].plot(0,np.linalg.norm(xyz),'o', c=color_list[0])   
+    data = np.array( [[0, xyz[0], xyz[1], xyz[2]],])
+    curr_lost_e = [0]
+    rad = [np.linalg.norm(xyz)]
 
-    for didx in range(len(decays)-3): ## two non numerical keys
+    for didx in range(len(decays)-3): ## three non numerical keys
 
         idx_for_colors = (didx + 1) ## starting isotope is 0
 
