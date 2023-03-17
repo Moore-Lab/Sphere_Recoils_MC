@@ -143,12 +143,17 @@ def select_end_of_traj(traj_full, energy, rotate_to_match, init_xyz, prior_traj=
 
     ## find the starting point along that trajectory that we reach the energy
     ## of interest from above
-    idx_before = np.where(traj_full[:,0] > energy)[0][-1]
-    idx_after = np.where(traj_full[:,0] <= energy)[0][0]
 
-    frac = (energy - traj_full[idx_after,0])/(traj_full[idx_before,0] - traj_full[idx_after,0])
-    starting_point = traj_full[idx_after,:] - frac*(traj_full[idx_after,:]-traj_full[idx_before,:])
-    shortened_traj = np.vstack((starting_point, traj_full[idx_after:, :]))
+    if(energy < traj_full[-1,0]): 
+        ## here the energy is less then the end of the traj, so we should just take the last two points
+        shortened_traj = traj_full[-2:, :]
+    else:
+        idx_before = np.where(traj_full[:,0] > energy)[0][-1]
+        idx_after = np.where(traj_full[:,0] <= energy)[0][0]
+
+        frac = (energy - traj_full[idx_after,0])/(traj_full[idx_before,0] - traj_full[idx_after,0])
+        starting_point = traj_full[idx_after,:] - frac*(traj_full[idx_after,:]-traj_full[idx_before,:])
+        shortened_traj = np.vstack((starting_point, traj_full[idx_after:, :]))
 
     # start at origin
     for xyzidx in range(1,4):
@@ -236,7 +241,7 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
             dict_to_use = traj_dict_out
 
         ## get new trajectory in the relevant domain
-        new_traj = dict_to_use[np.random.choice(NUM_SRIM_TRAJ)]
+        new_traj = dict_to_use[np.random.choice(NUM_SRIM_TRAJ)+1]
 
         
         shortened_traj = select_end_of_traj(new_traj, trimmed_traj[-1,0], True, 
@@ -256,57 +261,79 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
 
     return final_traj, final_domain
 
-def plot_trajectory(data, rin, rout):
+def plot_circles(ax, rin, rout):
+    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor='k', linestyle="-")
+    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor='k', linestyle="-")
+    ax.add_patch(circle_in)
+    ax.add_patch(circle_out)
+
+def plot_sphere(ax, r, c, alph=0.5):
+    u = np.linspace(0, 2 * np.pi, 100)
+    v = np.linspace(0, np.pi, 100)
+    x = r*np.outer(np.cos(u), np.sin(v))
+    y = r*np.outer(np.sin(u), np.sin(v))
+    z = r*np.outer(np.ones(np.size(u)), np.cos(v))
+
+    # plot sphere with transparency
+    ax.plot_surface(x, y, z, alpha=alph, color=c)
+
+def plot_event(event_dict, rin, rout):
+
+    color_list = ['k', 'r', 'b', 'g', 'c', 'm']
+    c1_list = [1,2,1]
+    c2_list = [2,3,3]
+
     # Create a 3D plot
-    fig = plt.figure(figsize=(12,3), facecolor='white')
-    #ax = fig.add_subplot(141, projection='3d')
+    fig = plt.figure(figsize=(10,8), facecolor='white')
 
-    ## Plot the array in 3D
-    #ax.plot3D(data[:,0], data[:,1], data[:,2], c='k', marker='o')
+    subfigs = fig.subfigures(2, 1, hspace=0.07, height_ratios=[2, 1])
 
-    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor='k', linestyle="-")
-    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor='k', linestyle="-")
+    ax3d = subfigs[0].add_subplot(1,1,1, projection='3d')
+    ax2d = subfigs[1].subplots(1,3)
+    for ax in ax2d:
+        plot_circles(ax, rin, rout)
 
-    ax1 = plt.subplot(1,3,1)
-    ax1.plot(data[:,1], data[:,2], 'k-')
-    c=ax1.scatter(data[:,1], data[:,2], c=data[:,0])
-    ax1.set_xlim(-rout*1.2, rout*1.2)
-    ax1.set_ylim(-rout*1.2, rout*1.2)
-    ax1.add_patch(circle_in)
-    ax1.add_patch(circle_out)
-    plt.colorbar(c)
+    decays = sorted(event_dict.keys())
 
-    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor='k', linestyle="-")
-    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor='k', linestyle="-")
+    for didx, decay in enumerate(decays):
 
-    ax2=plt.subplot(1,3,2)
-    ax2.plot(data[:,2], data[:,3], 'k-')
-    c=ax2.scatter(data[:,2], data[:,3], c=data[:,0])
-    ax2.set_xlim(-rout*1.2, rout*1.2)
-    ax2.set_ylim(-rout*1.2, rout*1.2)
-    ax2.add_patch(circle_in)
-    ax2.add_patch(circle_out)
-    plt.colorbar(c)
+        if(event_dict[decay]['energy']==0): continue
+        data = event_dict[decay]['traj']
 
-    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor='k', linestyle="-")
-    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor='k', linestyle="-")
-    ax3 = plt.subplot(1,3,3)
-    ax3.plot(data[:,1], data[:,3], 'k-')
-    c=ax3.scatter(data[:,1], data[:,3], c=data[:,0])
-    ax3.set_xlim(-rout*1.2, rout*1.2)
-    ax3.set_ylim(-rout*1.2, rout*1.2)
-    ax3.add_patch(circle_in)
-    ax3.add_patch(circle_out)
-    plt.colorbar(c)
+        ## Plot the array in 3D
+        ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[didx])
 
-    # Show the plot
+        for j,ax in enumerate(ax2d):
+            ax.plot(data[:,c1_list[j]], data[:,c2_list[j]], '-', color=color_list[didx])
+            ax.set_xlim(-rout*1.2, rout*1.2)
+            ax.set_ylim(-rout*1.2, rout*1.2)
+
+    ax3d.set_xlim(-rout*1.2, rout*1.2)
+    ax3d.set_ylim(-rout*1.2, rout*1.2)
+    ax3d.set_zlim(-rout*1.2, rout*1.2)
+    ax3d.set_xlabel('x [nm]')
+    ax3d.set_ylabel('y [nm]')
+    ax3d.set_zlabel('z [nm]')
+
+    col_names = ['x', 'y', 'z']
+    for j,ax in enumerate(ax2d):
+        c1, c2 = c1_list[j], c2_list[j]
+        ax.set_xlabel(col_names[c1-1] + " [nm]")
+        ax.set_ylabel(col_names[c2-1] + " [nm]")
+        ax.set_xlim(-rout*1.2, rout*1.2)
+        ax.set_ylim(-rout*1.2, rout*1.2)
+
+    plot_sphere(ax3d, rin, 'gray')
+    plot_sphere(ax3d, rout, 'y', alph=0.2)
+
+    plt.tight_layout()
     plt.show()
 
 def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
     """ Function to simulate the alpha transport through a sphere
     """
 
-    NUM_SRIM_TRAJ = 10000 ## number of simulated trajectories for each ion type
+    NUM_SRIM_TRAJ = 9999 ## number of simulated trajectories for each ion type
     alpha_mass = 4 ## mass of alpha particle in AMU
 
     ## construct sphere materials and parameters
@@ -367,7 +394,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             traj_dict = MC_dict[decay_daughter + '_' + curr_mat]
 
             ### get a random trajectory for its recoil
-            traj_idx = np.random.choice(NUM_SRIM_TRAJ)
+            traj_idx = np.random.choice(NUM_SRIM_TRAJ)+1
             curr_traj_full = traj_dict[traj_idx]
             init_xyz = [x,y,z]
             shortened_traj = select_end_of_traj(curr_traj_full,decay_NR_energy, False, init_xyz)
