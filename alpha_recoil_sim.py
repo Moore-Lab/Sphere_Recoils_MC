@@ -315,7 +315,13 @@ def plot_event(event_dict, sd):
 
         idx_for_colors = (didx + 1) ## starting isotope is 0
 
-        if(event_dict[didx]['energy']==0): continue
+        if(event_dict[didx]['energy']==0): 
+            ## this is a beta, so just plot its dot at the same position and go on
+            ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', s=2, c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+            for j,ax in enumerate(ax2d[:-1]):
+                ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
+            ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors])
+            continue
         data = event_dict[didx]['traj']
 
         ## Plot the array in 3D
