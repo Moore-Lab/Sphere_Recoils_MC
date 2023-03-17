@@ -477,19 +477,19 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
     return output_record
 
 
-def analyze_simulation(sim_dict, sd):
+def analyze_simulation(sim_dict):
     """ Take a simulation dictionary and analyze it:
           1) Make a histogram of the distribution of final positions
           2) Calculate the fraction of escaped daughters vs time
     """
 
-    sphere_colors = {"SiO2": "gray", "Au": "gold", "Ag": "silver"}
+    #sphere_colors = {"SiO2": "gray", "Au": "gold", "Ag": "silver"}
 
-    rin = sd['inner_radius']
-    rout = sd['inner_radius'] + sd['outer_shell_thick']
+    #rin = sd['inner_radius']
+    #rout = sd['inner_radius'] + sd['outer_shell_thick']
 
-    inner_sphere_color = sphere_colors[sd["inner_material"]]
-    outer_sphere_color = sphere_colors[sd["shell_material"]]
+    #inner_sphere_color = sphere_colors[sd["inner_material"]]
+    #outer_sphere_color = sphere_colors[sd["shell_material"]]
 
     final_radii = []
     num_bad_pts = 0
@@ -508,17 +508,22 @@ def analyze_simulation(sim_dict, sd):
 
     print("Found %d bad points out of %d: %.3f%%"%(num_bad_pts,N,num_bad_pts/N*100))
 
-    bins = np.arange(0,250,2)
-    h, be = np.histogram(final_radii, bins=bins)
-    bc = be[:-1] + np.diff(be)/2
+    ## final radius distribution
+    bins = np.arange(0,500,2)
+    final_rad_dist, be = np.histogram(final_radii, bins=bins)
+    final_rad_bin_cents = be[:-1] + np.diff(be)/2
 
-    plt.figure(facecolor='white')
-    plt.plot(bc, h, 'k')
-    yy = plt.ylim()
-    plt.plot([rin, rin], yy, color=inner_sphere_color)
-    plt.plot([rout, rout], yy, color=outer_sphere_color)
-    plt.ylim(yy)
-    plt.xlabel("Radius [nm]")
-    plt.ylabel("Counts/[2 nm]")
+    ## escape fraction
+    sdf = 1-np.cumsum(final_rad_dist)/np.sum(final_rad_dist)
 
-    plt.show()
+    return final_rad_bin_cents, final_rad_dist, sdf
+
+    #plt.figure(facecolor='white')
+    #plt.plot(bc, h, 'k')
+    #yy = plt.ylim()
+    #plt.plot([rin, rin], yy, color=inner_sphere_color)
+    #plt.plot([rout, rout], yy, color=outer_sphere_color)
+    #plt.ylim(yy)
+    #plt.xlabel("Radius [nm]")
+    #plt.ylabel("Counts/[2 nm]")
+    #plt.show()
