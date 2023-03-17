@@ -261,9 +261,9 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
 
     return final_traj, final_domain
 
-def plot_circles(ax, rin, rout):
-    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor='k', linestyle="-")
-    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor='k', linestyle="-")
+def plot_circles(ax, rin, rout, cin, cout):
+    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor=cin, linestyle="-")
+    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor=cout, linestyle="-")
     ax.add_patch(circle_in)
     ax.add_patch(circle_out)
 
@@ -277,36 +277,61 @@ def plot_sphere(ax, r, c, alph=0.5):
     # plot sphere with transparency
     ax.plot_surface(x, y, z, alpha=alph, color=c)
 
-def plot_event(event_dict, rin, rout):
+def plot_event(event_dict, sd):
 
-    color_list = ['k', 'r', 'b', 'g', 'c', 'm']
+    color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y']
     c1_list = [1,2,1]
     c2_list = [2,3,3]
 
-    # Create a 3D plot
-    fig = plt.figure(figsize=(10,8), facecolor='white')
+    sphere_colors = {"SiO2": "gray", "Au": "gold", "Ag": "silver"}
 
-    subfigs = fig.subfigures(2, 1, hspace=0.07, height_ratios=[2, 1])
+    rin = sd['inner_radius']
+    rout = sd['inner_radius'] + sd['outer_shell_thick']
+
+    inner_sphere_color = sphere_colors[sd["inner_material"]]
+    outer_sphere_color = sphere_colors[sd["shell_material"]]
+
+    # Create a 3D plot
+    fig = plt.figure(figsize=(12,8), facecolor='white')
+
+    subfigs = fig.subfigures(2, 1, hspace=0.07, height_ratios=[2.5, 1])
 
     ax3d = subfigs[0].add_subplot(1,1,1, projection='3d')
-    ax2d = subfigs[1].subplots(1,3)
-    for ax in ax2d:
-        plot_circles(ax, rin, rout)
+    ax2d = subfigs[1].subplots(1,4)
+    for ax in ax2d[:-1]:
+        plot_circles(ax, rin, rout, inner_sphere_color, outer_sphere_color)
 
-    decays = sorted(event_dict.keys())
+    decays = event_dict.keys()
+    lost_e = 0
 
-    for didx, decay in enumerate(decays):
+    ## plot the starting location of the parent
+    xyz = event_dict['start_pos']
+    ax3d.scatter(xyz[0], xyz[1], xyz[2], 'o', c=color_list[0], label=event_dict['parent']) ## plot the starting location
+    for j,ax in enumerate(ax2d[:-1]):
+        ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0])
+    ax2d[-1].plot(0,np.linalg.norm(xyz),'o', c=color_list[0])   
 
-        if(event_dict[decay]['energy']==0): continue
-        data = event_dict[decay]['traj']
+    for didx in range(len(decays)-2): ## two non numerical keys
+
+        idx_for_colors = (didx + 1) ## starting isotope is 0
+
+        if(event_dict[didx]['energy']==0): continue
+        data = event_dict[didx]['traj']
 
         ## Plot the array in 3D
-        ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[didx])
+        ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[idx_for_colors])
+        ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
 
-        for j,ax in enumerate(ax2d):
-            ax.plot(data[:,c1_list[j]], data[:,c2_list[j]], '-', color=color_list[didx])
-            ax.set_xlim(-rout*1.2, rout*1.2)
-            ax.set_ylim(-rout*1.2, rout*1.2)
+        for j,ax in enumerate(ax2d[:-1]):
+            ax.plot(data[:,c1_list[j]], data[:,c2_list[j]], '-', color=color_list[idx_for_colors])
+            ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', color=color_list[idx_for_colors])
+
+        ## now plot the radius
+        rad = np.sqrt( data[:,1]**2 + data[:,2]**2 + data[:,3]**2 )
+        curr_lost_e = lost_e + (data[0,0]-data[:,0])
+        ax2d[-1].plot(curr_lost_e, rad, '-', color=color_list[idx_for_colors])
+        ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', color=color_list[idx_for_colors])
+        lost_e = curr_lost_e[-1]
 
     ax3d.set_xlim(-rout*1.2, rout*1.2)
     ax3d.set_ylim(-rout*1.2, rout*1.2)
@@ -314,17 +339,27 @@ def plot_event(event_dict, rin, rout):
     ax3d.set_xlabel('x [nm]')
     ax3d.set_ylabel('y [nm]')
     ax3d.set_zlabel('z [nm]')
+    ax3d.legend(bbox_to_anchor=(1.3, 0.5))
 
     col_names = ['x', 'y', 'z']
-    for j,ax in enumerate(ax2d):
+    for j,ax in enumerate(ax2d[:-1]):
         c1, c2 = c1_list[j], c2_list[j]
         ax.set_xlabel(col_names[c1-1] + " [nm]")
         ax.set_ylabel(col_names[c2-1] + " [nm]")
         ax.set_xlim(-rout*1.2, rout*1.2)
         ax.set_ylim(-rout*1.2, rout*1.2)
+    ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
+    ax2d[-1].set_ylabel('Radius [nm]')
+    ax2d[-1].set_ylim(0, rout*1.2)
+    xm = curr_lost_e[-1]*1.1
+    ax2d[-1].set_xlim(-0.01*xm, xm)
+    ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
+    plt.text(xm*0.99, rin*1.01, sd["inner_material"], va='bottom', ha='right', color='k')
+    plt.text(xm*0.99, rout*1.01, sd["shell_material"], va='bottom', ha='right', color='k')
+    ax2d[-1].plot([0, xm],[rout, rout], color=outer_sphere_color)
 
-    plot_sphere(ax3d, rin, 'gray')
-    plot_sphere(ax3d, rout, 'y', alph=0.2)
+    plot_sphere(ax3d, rin, inner_sphere_color)
+    plot_sphere(ax3d, rout, outer_sphere_color, alph=0.2)
 
     plt.tight_layout()
     plt.show()
@@ -357,6 +392,9 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
 
         event_record = {} ## hold details of the entire decay chain for this event
         decay_idx = 0
+
+        event_record['parent'] = curr_iso
+        event_record['start_pos'] = [x,y,z]
 
         while curr_t12 > 0:
 
