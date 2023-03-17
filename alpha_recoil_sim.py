@@ -291,7 +291,7 @@ def plot_event(event_dict, sd):
     outer_sphere_color = sphere_colors[sd["shell_material"]]
 
     # Create a 3D plot
-    fig = plt.figure(figsize=(12,8), facecolor='white')
+    fig = plt.figure(figsize=(12,8), facecolor='white', layout='constrained')
 
     subfigs = fig.subfigures(2, 1, hspace=0.07, height_ratios=[2.5, 1])
 
@@ -369,8 +369,8 @@ def plot_event(event_dict, sd):
     plot_sphere(ax3d, rin, inner_sphere_color)
     plot_sphere(ax3d, rout, outer_sphere_color, alph=0.2)
 
-    plt.tight_layout()
-    plt.show()
+    #plt.tight_layout()
+    return fig
 
 def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
     """ Function to simulate the alpha transport through a sphere
