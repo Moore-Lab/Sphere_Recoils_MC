@@ -188,7 +188,7 @@ def check_is_stopped(traj, rin, rout):
         cross = first_downward_crossing_time(rad, rin)
         final_domain = 0
 
-    if(cross):
+    if(cross and traj[cross,0]>1.0): ## make sure it crosses with at least 1 keV
         is_stopped = False
     else:
         is_stopped = True
@@ -229,7 +229,7 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
     
     while not is_stopped:
 
-        trimmed_traj = curr_traj[:cross+1, :] ## initial trajectory up to crossing
+        trimmed_traj = curr_traj[:(cross+1), :] ## initial trajectory up to crossing (+1)
         if(len(final_traj)>0):
             final_traj = np.vstack((final_traj, trimmed_traj))
         else:
@@ -246,7 +246,6 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
         
         shortened_traj = select_end_of_traj(new_traj, trimmed_traj[-1,0], True, 
                                             trimmed_traj[-1,1:4], prior_traj=trimmed_traj)
-
 
         curr_traj = shortened_traj
 
@@ -311,7 +310,7 @@ def plot_event(event_dict, sd):
         ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0])
     ax2d[-1].plot(0,np.linalg.norm(xyz),'o', c=color_list[0])   
 
-    for didx in range(len(decays)-2): ## two non numerical keys
+    for didx in range(len(decays)-3): ## two non numerical keys
 
         idx_for_colors = (didx + 1) ## starting isotope is 0
 
@@ -449,26 +448,74 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             final_traj, final_domain = follow_trajectory(shortened_traj, r_inner, r_outer, 
                                                          traj_dict_inner, traj_dict_outer, NUM_SRIM_TRAJ)
 
-            #plot_trajectory(final_traj, r_inner, r_outer)
-
             decay_record['traj'] = final_traj
             decay_record['final_domain'] = final_domain
+
             ## update position to end of trajectory
             x, y, z = final_traj[-1, 1], final_traj[-1, 2], final_traj[-1, 3]
+
+            # update material to wherever we ended up
+            if(np.sqrt(x**2 + y**2 + z**2) <= r_inner):
+                curr_mat = mat_inner
+            else:
+                curr_mat = mat_outer
 
             ### update to the new isotope and t12
             curr_iso = decay_daughter
             curr_t12 = decay_dict[curr_iso + "_t12"]
 
-            ## make sure to break if we've exited the sphere
-            if(final_domain == 2):
-                curr_t12 = -1
-
             ## save the data
             event_record[decay_idx] = decay_record
             decay_idx += 1
 
+        event_record['final_pos'] = np.array([x,y,z])
         output_record[n] = event_record
 
     return output_record
 
+
+def analyze_simulation(sim_dict, sd):
+    """ Take a simulation dictionary and analyze it:
+          1) Make a histogram of the distribution of final positions
+          2) Calculate the fraction of escaped daughters vs time
+    """
+
+    sphere_colors = {"SiO2": "gray", "Au": "gold", "Ag": "silver"}
+
+    rin = sd['inner_radius']
+    rout = sd['inner_radius'] + sd['outer_shell_thick']
+
+    inner_sphere_color = sphere_colors[sd["inner_material"]]
+    outer_sphere_color = sphere_colors[sd["shell_material"]]
+
+    final_radii = []
+    num_bad_pts = 0
+    N = len(sim_dict.keys())
+    for i in range(N):
+        curr_event = sim_dict[i]
+
+        rad = np.sqrt(np.sum(curr_event['final_pos']**2))
+        if(not np.isnan(rad)):
+           final_radii.append(rad)
+        else:
+            num_bad_pts += 1
+
+        #if(final_radii[-1]>20 and final_radii[-1]<21):
+        #    print(i)
+
+    print("Found %d bad points out of %d: %.3f%%"%(num_bad_pts,N,num_bad_pts/N*100))
+
+    bins = np.arange(0,250,2)
+    h, be = np.histogram(final_radii, bins=bins)
+    bc = be[:-1] + np.diff(be)/2
+
+    plt.figure(facecolor='white')
+    plt.plot(bc, h, 'k')
+    yy = plt.ylim()
+    plt.plot([rin, rin], yy, color=inner_sphere_color)
+    plt.plot([rout, rout], yy, color=outer_sphere_color)
+    plt.ylim(yy)
+    plt.xlabel("Radius [nm]")
+    plt.ylabel("Counts/[2 nm]")
+
+    plt.show()
