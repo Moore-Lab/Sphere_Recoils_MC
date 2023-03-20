@@ -1,6 +1,6 @@
 # Sphere_Recoils_MC
 
-Code to simulate the containment of daughter nuclear recoils following alpha decays in a silica sphere.
+Code to simulate the containment of daughter nuclear recoils following alpha decays in a core/shell spherical particle.
 
 The basic simulation steps are as follows:
  1) Generate a set of decay chains to simulate using SRIM 2013 (these are the data files in the decay_data folder)
