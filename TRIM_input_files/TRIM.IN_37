@@ -1,12 +1,12 @@
 ==> SRIM-2013.00 This file controls TRIM Calculations.
 Ion: Z1 ,  M1,  Energy (keV), Angle,Number,Bragg Corr,AutoSave Number.
-    88    223    200    0    10000    1    10000
+    83    207    200    0    10000    1    10000
 Cascades(1=No;2=Full;3=Sputt;4-5=Ions;6-7=Neutrons), Random Number Seed, Reminders
                       1                                   0       0
 Diskfiles (0=no,1=yes): Ranges, Backscatt, Transmit, Sputtered, Collisions(1=Ion;2=Ion+Recoils), Special EXYZ.txt file
                           0       0           0       0               0                            1000
 Target material : Number of Elements & Layers
-"Ra-223 (200) into  Silver                    "       1               1
+"Bi-207 (200) into  Silver                    "       1               1
 PlotType (0-5); Plot Depths: Xmin, Xmax(Ang.) [=0 0 for Viewing Full Target]
        0                         0            2000
 Target Elements:    Z   Mass(amu)
