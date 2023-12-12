@@ -310,7 +310,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
     ax3d = subfigs[0].add_subplot(1,1,1, projection='3d')
     ax2d = subfigs[1].subplots(1,4)
             
-    if(sphere_coords):
+    if(sphere_coords and False):
         for ax in ax2d[:-1]:
             plot_circles(ax, rin, rout, inner_sphere_color, outer_sphere_color)
 
@@ -336,18 +336,21 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
 
         idx_for_colors = (didx + 1) ## starting isotope is 0
 
+        data = event_dict[didx]['traj']
+
         if(event_dict[didx]['energy']==0): 
             ## this is a beta, so just plot its dot at the same position and go on
             ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', s=2, c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
             if(sphere_coords):
                 for j,ax in enumerate(ax2d[:-1]):
                     ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
-                else:
-                    for j,ax in enumerate(ax2d[:-1]):
-                        ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', ms=2, color=color_list[idx_for_colors])
+            else:
+                for j,ax in enumerate(ax2d[:-1]):
+                    ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', ms=2, color=color_list[idx_for_colors])
             ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors])
             continue
-        data = event_dict[didx]['traj']
+
+
 
         ## Plot the array in 3D
         ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[idx_for_colors])
@@ -383,8 +386,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
             c1, c2 = c1_list[j], c2_list[j]
             ax.set_xlabel(col_names[c1-1] + " [nm]")
             ax.set_ylabel(col_names[c2-1] + " [nm]")
-            ax.set_xlim(-rout*1.2, rout*1.2)
-            ax.set_ylim(-rout*1.2, rout*1.2)
+            #ax.set_xlim(-rout*1.2, rout*1.2)
+            #ax.set_ylim(-rout*1.2, rout*1.2)
 
     ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
     ax2d[-1].set_ylabel('Radius [nm]')
@@ -435,7 +438,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             x, y, z = random_point_in_sphere(r_inner)
             curr_mat = mat_inner
         elif(sphere_dict["starting_loc"] == "shell"):
-            x, y, z = random_point_on_surface(r_inner+sphere_dict['outer_shell_thick']/2)
+            x, y, z = random_point_on_surface(r_inner + sphere_dict['outer_shell_thick']/2)
             curr_mat = mat_outer
         else:
             print("Starting location not recognized")
@@ -478,6 +481,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
                 ### update to the new isotope and t12
                 curr_iso = decay_daughter
                 curr_t12 = decay_dict[curr_iso + "_t12"]
+                decay_record['traj'] = np.array([[0,x,y,z],])
                 ## save the data
                 event_record[decay_idx] = decay_record
                 decay_idx += 1    
@@ -506,7 +510,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
                 final_momentum = np.sqrt(2*daughter_mass*final_traj[-1,0]) ## in MeV
                 final_momentum_dir = (final_traj[-1,1:4] - final_traj[-2,1:4])
                 final_momentum_dir = final_momentum_dir / np.linalg.norm(final_momentum_dir)
-                event_record['final_momentum'] = final_momentum *final_momentum_dir
+                event_record['final_momentum'] = final_momentum*final_momentum_dir
 
             decay_record['traj'] = final_traj
             decay_record['final_domain'] = final_domain
@@ -533,7 +537,8 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             curr_t12 = decay_dict[curr_iso + "_t12"]
 
         event_record['final_pos'] = np.array([x,y,z])
-        if(final_domain < 2):
+
+        if('final_momentum' not in event_record.keys()): ## never exited
             event_record['final_momentum'] = np.array([0,0,0])
         output_record[n] = event_record
 
@@ -555,14 +560,17 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
     #outer_sphere_color = sphere_colors[sd["shell_material"]]
 
     final_radii = []
+    final_momentum = []
     num_bad_pts = 0
     N = len(sim_dict.keys())
     for i in range(N):
         curr_event = sim_dict[i]
-
+        
         rad = np.sqrt(np.sum(curr_event['final_pos']**2))
-        if(not np.isnan(rad)):
-           final_radii.append(rad)
+        momentum = np.linalg.norm(curr_event['final_momentum'])
+        if(~np.isnan(rad) & ~np.isnan(momentum)):
+            final_radii.append(rad)
+            final_momentum.append(momentum)
         else:
             num_bad_pts += 1
 
@@ -582,7 +590,7 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
     ## escape fraction
     sdf = 1-np.cumsum(final_rad_dist)/np.sum(final_rad_dist)
 
-    return final_rad_bin_cents, final_rad_dist, sdf
+    return final_rad_bin_cents, final_rad_dist, sdf, final_momentum
 
     #plt.figure(facecolor='white')
     #plt.plot(bc, h, 'k')
