@@ -325,14 +325,14 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
             ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0])
     else:
         for j,ax in enumerate(ax2d[:-1]):
-            ax.plot(0,xyz[c1_list[j]-1], 'o', color=color_list[0])
+            ax.plot(0,xyz[j], 'o', color=color_list[0])
             
     ax2d[-1].plot(0,np.linalg.norm(xyz),'o', c=color_list[0])   
     data = np.array( [[0, xyz[0], xyz[1], xyz[2]],])
     curr_lost_e = [0]
     rad = [np.linalg.norm(xyz)]
 
-    for didx in range(len(decays)-3): ## three non numerical keys
+    for didx in range(len(decays)-4): ## four non numerical keys
 
         idx_for_colors = (didx + 1) ## starting isotope is 0
 
@@ -344,7 +344,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
                     ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
                 else:
                     for j,ax in enumerate(ax2d[:-1]):
-                        ax.plot(curr_lost_e[-1], data[-1,c1_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
+                        ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', ms=2, color=color_list[idx_for_colors])
             ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors])
             continue
         data = event_dict[didx]['traj']
@@ -366,8 +366,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
                 ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', color=color_list[idx_for_colors])
         else:
             for j,ax in enumerate(ax2d[:-1]):
-                ax.plot(curr_lost_e, data[:,c1_list[j]], '-', color=color_list[idx_for_colors])
-                ax.plot(curr_lost_e[-1], data[-1,c1_list[j]], 'o', color=color_list[idx_for_colors])
+                ax.plot(curr_lost_e, data[:,j+1], '-', color=color_list[idx_for_colors])
+                ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', color=color_list[idx_for_colors])
 
     ax3d.set_xlim(-rout*1.2, rout*1.2)
     ax3d.set_ylim(-rout*1.2, rout*1.2)
@@ -388,15 +388,16 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
 
     ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
     ax2d[-1].set_ylabel('Radius [nm]')
+    xm = curr_lost_e[-1]*1.1
     if(len(rad_lims)==0):
         ax2d[-1].set_ylim(0, rout*1.2)
+        plt.text(xm*0.99, rin*1.01, sd["inner_material"], va='bottom', ha='right', color='k')
+        plt.text(xm*0.99, rout*1.01, sd["shell_material"], va='bottom', ha='right', color='k')
     else:
-        ax2d[-1].set_ylim(rad_lims[0], rad_lims[1])
-    xm = curr_lost_e[-1]*1.1
+        if(rad_lims[0] > 0):
+            ax2d[-1].set_ylim(rad_lims[0], rad_lims[1])
     ax2d[-1].set_xlim(-0.01*xm, xm)
     ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
-    plt.text(xm*0.99, rin*1.01, sd["inner_material"], va='bottom', ha='right', color='k')
-    plt.text(xm*0.99, rout*1.01, sd["shell_material"], va='bottom', ha='right', color='k')
     ax2d[-1].plot([0, xm],[rout, rout], color=outer_sphere_color)
 
     plot_sphere(ax3d, rin, inner_sphere_color)
@@ -496,6 +497,17 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             final_traj, final_domain = follow_trajectory(shortened_traj, r_inner, r_outer, 
                                                          traj_dict_inner, traj_dict_outer, NUM_SRIM_TRAJ)
 
+            ## shorten trajectory if it exited the sphere
+            traj_rad = np.sqrt(final_traj[:, 1]**2 + final_traj[:, 2]**2 + final_traj[:, 3]**2)
+            exit_idx = np.where(traj_rad > r_outer)[0]
+            if(len(exit_idx)>0):
+                final_traj = final_traj[:(exit_idx[0]+1), :]
+                final_domain = 2 ## vacuum
+                final_momentum = np.sqrt(2*daughter_mass*final_traj[-1,0]) ## in MeV
+                final_momentum_dir = (final_traj[-1,1:4] - final_traj[-2,1:4])
+                final_momentum_dir = final_momentum_dir / np.linalg.norm(final_momentum_dir)
+                event_record['final_momentum'] = final_momentum *final_momentum_dir
+
             decay_record['traj'] = final_traj
             decay_record['final_domain'] = final_domain
 
@@ -508,15 +520,21 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             else:
                 curr_mat = mat_outer
 
-            ### update to the new isotope and t12
-            curr_iso = decay_daughter
-            curr_t12 = decay_dict[curr_iso + "_t12"]
-
             ## save the data
             event_record[decay_idx] = decay_record
             decay_idx += 1
 
+            ## stop if we've exited the sphere
+            if(final_domain == 2):  
+                break
+
+            ### update to the new isotope and t12
+            curr_iso = decay_daughter
+            curr_t12 = decay_dict[curr_iso + "_t12"]
+
         event_record['final_pos'] = np.array([x,y,z])
+        if(final_domain < 2):
+            event_record['final_momentum'] = np.array([0,0,0])
         output_record[n] = event_record
 
     return output_record
