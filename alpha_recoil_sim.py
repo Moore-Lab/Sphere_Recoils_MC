@@ -1,5 +1,4 @@
 ## set of helper functions for simulating escape of nuclear recoils from silica spheres
-
 import numpy as np
 import matplotlib.pyplot as plt
 
@@ -63,6 +62,19 @@ def random_point_in_sphere(radius):
     # Generate random coordinates in the sphere with given radius (thanks ChatGPT!)
     u, v, w = np.random.uniform(0, 1, size=3)
     r = w**(1/3) * radius
+
+    # Convert random coordinates to Cartesian coordinates
+    theta = 2 * np.pi * u
+    phi = np.arccos(2 * v - 1)
+    x = r * np.sin(phi) * np.cos(theta)
+    y = r * np.sin(phi) * np.sin(theta)
+    z = r * np.cos(phi)
+
+    return x, y, z
+
+def random_point_on_surface(r):
+    # Generate random coordinates in the sphere with given radius (thanks ChatGPT!)
+    u, v = np.random.uniform(0, 1, size=2)
 
     # Convert random coordinates to Cartesian coordinates
     theta = 2 * np.pi * u
@@ -276,7 +288,7 @@ def plot_sphere(ax, r, c, alph=0.5):
     # plot sphere with transparency
     ax.plot_surface(x, y, z, alpha=alph, color=c)
 
-def plot_event(event_dict, sd):
+def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
 
     color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y', 'orange', 'purple']
     c1_list = [1,2,1]
@@ -297,8 +309,10 @@ def plot_event(event_dict, sd):
 
     ax3d = subfigs[0].add_subplot(1,1,1, projection='3d')
     ax2d = subfigs[1].subplots(1,4)
-    for ax in ax2d[:-1]:
-        plot_circles(ax, rin, rout, inner_sphere_color, outer_sphere_color)
+            
+    if(sphere_coords):
+        for ax in ax2d[:-1]:
+            plot_circles(ax, rin, rout, inner_sphere_color, outer_sphere_color)
 
     decays = event_dict.keys()
     lost_e = 0
@@ -306,8 +320,13 @@ def plot_event(event_dict, sd):
     ## plot the starting location of the parent
     xyz = event_dict['start_pos']
     ax3d.scatter(xyz[0], xyz[1], xyz[2], 'o', c=color_list[0], label=event_dict['parent']) ## plot the starting location
-    for j,ax in enumerate(ax2d[:-1]):
-        ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0])
+    if(sphere_coords):
+        for j,ax in enumerate(ax2d[:-1]):
+            ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0])
+    else:
+        for j,ax in enumerate(ax2d[:-1]):
+            ax.plot(0,xyz[c1_list[j]-1], 'o', color=color_list[0])
+            
     ax2d[-1].plot(0,np.linalg.norm(xyz),'o', c=color_list[0])   
     data = np.array( [[0, xyz[0], xyz[1], xyz[2]],])
     curr_lost_e = [0]
@@ -320,8 +339,12 @@ def plot_event(event_dict, sd):
         if(event_dict[didx]['energy']==0): 
             ## this is a beta, so just plot its dot at the same position and go on
             ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', s=2, c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
-            for j,ax in enumerate(ax2d[:-1]):
-                ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
+            if(sphere_coords):
+                for j,ax in enumerate(ax2d[:-1]):
+                    ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
+                else:
+                    for j,ax in enumerate(ax2d[:-1]):
+                        ax.plot(curr_lost_e[-1], data[-1,c1_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
             ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors])
             continue
         data = event_dict[didx]['traj']
@@ -330,16 +353,21 @@ def plot_event(event_dict, sd):
         ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[idx_for_colors])
         ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
 
-        for j,ax in enumerate(ax2d[:-1]):
-            ax.plot(data[:,c1_list[j]], data[:,c2_list[j]], '-', color=color_list[idx_for_colors])
-            ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', color=color_list[idx_for_colors])
-
         ## now plot the radius
         rad = np.sqrt( data[:,1]**2 + data[:,2]**2 + data[:,3]**2 )
         curr_lost_e = lost_e + (data[0,0]-data[:,0])
         ax2d[-1].plot(curr_lost_e, rad, '-', color=color_list[idx_for_colors])
         ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', color=color_list[idx_for_colors])
         lost_e = curr_lost_e[-1]
+
+        if(sphere_coords):
+            for j,ax in enumerate(ax2d[:-1]):
+                ax.plot(data[:,c1_list[j]], data[:,c2_list[j]], '-', color=color_list[idx_for_colors])
+                ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', color=color_list[idx_for_colors])
+        else:
+            for j,ax in enumerate(ax2d[:-1]):
+                ax.plot(curr_lost_e, data[:,c1_list[j]], '-', color=color_list[idx_for_colors])
+                ax.plot(curr_lost_e[-1], data[-1,c1_list[j]], 'o', color=color_list[idx_for_colors])
 
     ax3d.set_xlim(-rout*1.2, rout*1.2)
     ax3d.set_ylim(-rout*1.2, rout*1.2)
@@ -349,16 +377,21 @@ def plot_event(event_dict, sd):
     ax3d.set_zlabel('z [nm]')
     ax3d.legend(bbox_to_anchor=(1.3, 0.5))
 
-    col_names = ['x', 'y', 'z']
-    for j,ax in enumerate(ax2d[:-1]):
-        c1, c2 = c1_list[j], c2_list[j]
-        ax.set_xlabel(col_names[c1-1] + " [nm]")
-        ax.set_ylabel(col_names[c2-1] + " [nm]")
-        ax.set_xlim(-rout*1.2, rout*1.2)
-        ax.set_ylim(-rout*1.2, rout*1.2)
+    if(sphere_coords):
+        col_names = ['x', 'y', 'z']
+        for j,ax in enumerate(ax2d[:-1]):
+            c1, c2 = c1_list[j], c2_list[j]
+            ax.set_xlabel(col_names[c1-1] + " [nm]")
+            ax.set_ylabel(col_names[c2-1] + " [nm]")
+            ax.set_xlim(-rout*1.2, rout*1.2)
+            ax.set_ylim(-rout*1.2, rout*1.2)
+
     ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
     ax2d[-1].set_ylabel('Radius [nm]')
-    ax2d[-1].set_ylim(0, rout*1.2)
+    if(len(rad_lims)==0):
+        ax2d[-1].set_ylim(0, rout*1.2)
+    else:
+        ax2d[-1].set_ylim(rad_lims[0], rad_lims[1])
     xm = curr_lost_e[-1]*1.1
     ax2d[-1].set_xlim(-0.01*xm, xm)
     ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
@@ -394,8 +427,20 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
 
         curr_iso = iso ## starting isotope at top of chain
         t = 0 ## start at time zero
-        x, y, z = random_point_in_sphere(r_inner)
-        curr_mat = mat_inner
+        if("starting_loc" not in sphere_dict.keys()):
+            x, y, z = random_point_in_sphere(r_inner) ## backwards compatibility
+            curr_mat = mat_inner
+        elif(sphere_dict["starting_loc"] == "core"):
+            x, y, z = random_point_in_sphere(r_inner)
+            curr_mat = mat_inner
+        elif(sphere_dict["starting_loc"] == "shell"):
+            x, y, z = random_point_on_surface(r_inner+sphere_dict['outer_shell_thick']/2)
+            curr_mat = mat_outer
+        else:
+            print("Starting location not recognized")
+            return -1 
+    
+
         curr_t12 = decay_dict[curr_iso + "_t12"] ## get this to start the while loop
 
         event_record = {} ## hold details of the entire decay chain for this event
@@ -477,7 +522,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
     return output_record
 
 
-def analyze_simulation(sim_dict):
+def analyze_simulation(sim_dict, sphere_dict=[]):
     """ Take a simulation dictionary and analyze it:
           1) Make a histogram of the distribution of final positions
           2) Calculate the fraction of escaped daughters vs time
@@ -509,7 +554,10 @@ def analyze_simulation(sim_dict):
     print("Found %d bad points out of %d: %.3f%%"%(num_bad_pts,N,num_bad_pts/N*100))
 
     ## final radius distribution
-    bins = np.arange(0,500,2)
+    if(len(sphere_dict)>0):
+        bins = np.arange(0,sphere_dict['inner_radius']+sphere_dict['outer_shell_thick'],2)
+    else:
+        bins = np.arange(0,500,2)
     final_rad_dist, be = np.histogram(final_radii, bins=bins)
     final_rad_bin_cents = be[:-1] + np.diff(be)/2
 
