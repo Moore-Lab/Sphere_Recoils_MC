@@ -610,7 +610,7 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
     #plt.ylabel("Counts/[2 nm]")
     #plt.show()
 
-def reconstruct_momenta(sim_dict, add_noise = 0, binsize=10):
+def reconstruct_momenta(sim_dict, add_noise = 0, binsize=5):
     """ Take a simulation dictionary and analyze it:
           1) For each alpha decay, reconstruct the total momentum given to the sphere
           2) Separate this by isotope
@@ -678,7 +678,7 @@ def reconstruct_momenta(sim_dict, add_noise = 0, binsize=10):
             plt.figure(pdf_fig.number)
             plt.subplot(1,3,col+1)
             plt.plot(bc, hh, label=iso)
-            plt.ylim(0,np.max(hh[bc>1])*1.2)
+            plt.ylim(0,np.max(hh[bc>50])*1.5)
             plt.xlim(bins[0], bins[-1])
 
             if(col == 2):
@@ -716,10 +716,65 @@ def reconstruct_momenta(sim_dict, add_noise = 0, binsize=10):
         plt.xlim(bins[0], bins[-1])
 
     plt.plot(bc, tot_hist, 'k', label='Total')
-    plt.ylim(0,np.max(tot_hist[bc>1])*1.2)
+    plt.ylim(0,np.max(tot_hist[bc>50])*1.1)
     plt.xlabel("$x$ Momentum [MeV]")
     plt.ylabel("Counts/(%d MeV)"%binsize)
     plt.legend()
     plt.title("Projected 1D momentum")
+
+    plt.show()
+
+
+def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
+    """ Take a simulation dictionary and analyze it:
+          1) For each alpha decay, reconstruct the total momentum given to the sphere
+          2) Separate this by isotope
+    """
+
+    isos_to_use = ["Tl-208", 'Pb-208']
+
+    momentum_dict = {}
+    for ciso in isos_to_use:
+        momentum_dict[ciso] = []
+
+    num_bad_pts = 0
+    N = len(sim_dict.keys())
+
+    implant_rad = []
+    implant_distance = []
+    for i in range(N):
+        curr_event = sim_dict[i]
+
+        for k in curr_event.keys():
+            if(isinstance(k, str)): continue
+
+            curr_iso = curr_event[k]['iso']
+            if(curr_iso != "Pb-212"): continue
+        
+            implant_rad.append( np.sqrt(np.sum(curr_event[k]['traj'][-1, 1:]**2)) )
+            dist = np.sqrt( np.sum( (curr_event[k]['traj'][-1, 1:] - curr_event['start_pos'])**2) )
+            implant_distance.append(dist)
+            break
+
+
+    plt.figure()
+    implant_rad = np.array(implant_rad)
+    implant_distance = np.array(implant_distance)
+    implant_cut = implant_rad < sphere_rad
+    eff = np.sum(implant_cut)/N
+    print("Implantation efficiency: ", eff)
+
+    bins = np.arange(2850,3010,binsize)
+    hh, be = np.histogram(implant_rad[implant_cut], bins=bins)
+    bc = be[:-1] + np.diff(be)/2
+    plt.plot(bc, hh, 'k', label="Radial position")
+
+    hhd, bed = np.histogram(sphere_rad - implant_distance[implant_cut], bins=bins)
+    bcd = bed[:-1] + np.diff(bed)/2
+    plt.plot(bcd, hhd, 'r', label="Cartesian distance")
+    plt.legend()
+    plt.xlabel("Distance from center [nm]")
+    plt.ylabel("Counts/(%d nm)"%binsize)    
+    plt.title("Implantation distribution, efficiency = %.3f"%eff)
 
     plt.show()
