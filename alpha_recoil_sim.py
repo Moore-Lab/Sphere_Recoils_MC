@@ -731,7 +731,7 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
           2) Separate this by isotope
     """
 
-    isos_to_use = ["Tl-208", 'Pb-208']
+    isos_to_use = ["Pb-212", "Tl-208", 'Pb-208']
 
     momentum_dict = {}
     for ciso in isos_to_use:
@@ -740,8 +740,11 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
     num_bad_pts = 0
     N = len(sim_dict.keys())
 
-    implant_rad = []
+    implant_rad = {}
     implant_distance = []
+    for iso in isos_to_use:
+        implant_rad[iso] = []
+
     for i in range(N):
         curr_event = sim_dict[i]
 
@@ -749,23 +752,23 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
             if(isinstance(k, str)): continue
 
             curr_iso = curr_event[k]['iso']
-            if(curr_iso != "Pb-212"): continue
+            if(curr_iso not in isos_to_use): continue
         
-            implant_rad.append( np.sqrt(np.sum(curr_event[k]['traj'][-1, 1:]**2)) )
-            dist = np.sqrt( np.sum( (curr_event[k]['traj'][-1, 1:] - curr_event['start_pos'])**2) )
-            implant_distance.append(dist)
-            break
+            implant_rad[curr_iso].append( np.sqrt(np.sum(curr_event[k]['traj'][-1, 1:]**2)) )
 
+            if(curr_iso == "Pb-212"):
+                dist = np.sqrt( np.sum( (curr_event[k]['traj'][-1, 1:] - curr_event['start_pos'])**2) )
+                implant_distance.append(dist)
 
     plt.figure()
-    implant_rad = np.array(implant_rad)
+    implant_r = np.array(implant_rad["Pb-212"])
     implant_distance = np.array(implant_distance)
-    implant_cut = implant_rad < sphere_rad
+    implant_cut = implant_r < sphere_rad
     eff = np.sum(implant_cut)/N
     print("Implantation efficiency: ", eff)
 
     bins = np.arange(2850,3010,binsize)
-    hh, be = np.histogram(implant_rad[implant_cut], bins=bins)
+    hh, be = np.histogram(implant_r[implant_cut], bins=bins)
     bc = be[:-1] + np.diff(be)/2
     plt.plot(bc, hh, 'k', label="Radial position")
 
@@ -777,4 +780,18 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
     plt.ylabel("Counts/(%d nm)"%binsize)    
     plt.title("Implantation distribution, efficiency = %.3f"%eff)
 
+    plt.figure()
+    bins = np.arange(2800,3010,binsize)
+    for iso in isos_to_use:
+        
+        implant_r = np.array(implant_rad[iso])
+        implant_cut = implant_r < sphere_rad
+        hh, be = np.histogram(implant_r[implant_cut], bins=bins)
+        #implant_cut = implant_rad < sphere_rad
+        bc = be[:-1] + np.diff(be)/2
+        plt.plot(bc, hh, label=iso)
+
+    plt.legend()
+    plt.xlabel("Distance from center [nm]")
+    plt.ylabel("Counts/(%d nm)"%binsize)  
     plt.show()
