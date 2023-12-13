@@ -495,6 +495,12 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             init_xyz = [x,y,z]
             shortened_traj = select_end_of_traj(curr_traj_full,decay_NR_energy, False, init_xyz)
 
+            ## essentially the alpha leaves with negligible momentum loss, eventually can add a real
+            ## SRIM sim for this
+            init_alpha_momentum_dir = -(shortened_traj[-1,1:4] - shortened_traj[-2,1:4])
+            init_alpha_momentum_dir = init_alpha_momentum_dir/np.linalg.norm(init_alpha_momentum_dir)
+            decay_record['alpha_momentum'] = np.sqrt(2 * decay_alpha_energy * alpha_mass) * init_alpha_momentum_dir
+
             traj_dict_inner = MC_dict[decay_daughter + '_' + mat_inner]
             traj_dict_outer = MC_dict[decay_daughter + '_' + mat_outer]
             ## follow trajectory until it stops
@@ -510,7 +516,11 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
                 final_momentum = np.sqrt(2*daughter_mass*final_traj[-1,0]) ## in MeV
                 final_momentum_dir = (final_traj[-1,1:4] - final_traj[-2,1:4])
                 final_momentum_dir = final_momentum_dir / np.linalg.norm(final_momentum_dir)
-                event_record['final_momentum'] = final_momentum*final_momentum_dir
+                decay_record['NR_momentum'] = final_momentum*final_momentum_dir
+                event_record['final_NR_momentum'] = final_momentum*final_momentum_dir
+            else:
+                decay_record['NR_momentum'] = np.array([0,0,0])               
+                
 
             decay_record['traj'] = final_traj
             decay_record['final_domain'] = final_domain
@@ -538,8 +548,8 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
 
         event_record['final_pos'] = np.array([x,y,z])
 
-        if('final_momentum' not in event_record.keys()): ## never exited
-            event_record['final_momentum'] = np.array([0,0,0])
+        if('final_NR_momentum' not in event_record.keys()): ## never exited
+            event_record['final_NR_momentum'] = np.array([0,0,0])
         output_record[n] = event_record
 
     return output_record
@@ -567,10 +577,8 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
         curr_event = sim_dict[i]
         
         rad = np.sqrt(np.sum(curr_event['final_pos']**2))
-        momentum = np.linalg.norm(curr_event['final_momentum'])
-        if(~np.isnan(rad) & ~np.isnan(momentum)):
+        if(~np.isnan(rad)):
             final_radii.append(rad)
-            final_momentum.append(momentum)
         else:
             num_bad_pts += 1
 
@@ -590,7 +598,7 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
     ## escape fraction
     sdf = 1-np.cumsum(final_rad_dist)/np.sum(final_rad_dist)
 
-    return final_rad_bin_cents, final_rad_dist, sdf, final_momentum
+    return final_rad_bin_cents, final_rad_dist, sdf
 
     #plt.figure(facecolor='white')
     #plt.plot(bc, h, 'k')
@@ -601,3 +609,117 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
     #plt.xlabel("Radius [nm]")
     #plt.ylabel("Counts/[2 nm]")
     #plt.show()
+
+def reconstruct_momenta(sim_dict, add_noise = 0, binsize=10):
+    """ Take a simulation dictionary and analyze it:
+          1) For each alpha decay, reconstruct the total momentum given to the sphere
+          2) Separate this by isotope
+    """
+
+    isos_to_use = ["Tl-208", 'Pb-208']
+
+    momentum_dict = {}
+    for ciso in isos_to_use:
+        momentum_dict[ciso] = []
+
+    num_bad_pts = 0
+    N = len(sim_dict.keys())
+    for i in range(N):
+        curr_event = sim_dict[i]
+
+        for k in curr_event.keys():
+            if(isinstance(k, str)): continue
+
+            curr_iso = curr_event[k]['iso']
+
+            if curr_iso in isos_to_use:
+
+                if( 'alpha_momentum' not in curr_event[k].keys()):
+                    if(curr_event[k]['traj'][0,0]> 0):
+                        num_bad_pts += 1
+                    continue
+
+                p_alpha = curr_event[k]['alpha_momentum']
+                p_NR = curr_event[k]['NR_momentum']
+                tot_momentum = p_alpha + p_NR
+
+                pt, pa, pn = np.linalg.norm(tot_momentum), np.linalg.norm(p_alpha), np.linalg.norm(p_NR)
+                px = np.abs(tot_momentum[0])
+                noise_vec = np.random.randn(4)*add_noise
+                pt += noise_vec[0]
+                pa += noise_vec[1]
+                pn += noise_vec[2]
+                px += noise_vec[3]
+
+                momentum_dict[curr_iso].append([pt, pa, pn, px])
+
+    print("Found %d bad points out of %d: %.3f%%"%(num_bad_pts,N,num_bad_pts/N*100))    
+
+    pdf_fig = plt.figure(figsize=(15,4))
+    cdf_fig = plt.figure(figsize=(6,4))
+    x_fig = plt.figure(figsize=(6,4))
+    bins = np.arange(0,350,binsize)
+
+    tot_hist_dict = {}
+
+    labs = ['Total momentum', r"$\alpha$ momentum", "NR momentum"]
+    for col in range(3):
+       
+        tot_hist_dict[col] = np.zeros(len(bins)-1)
+        for iso in isos_to_use:
+
+            curr_moms = np.array(momentum_dict[iso])
+
+            hh, be = np.histogram(curr_moms[:,col], bins=bins)
+            bc = be[:-1] + np.diff(be)/2
+
+            tot_hist_dict[col] += hh
+
+            plt.figure(pdf_fig.number)
+            plt.subplot(1,3,col+1)
+            plt.plot(bc, hh, label=iso)
+            plt.ylim(0,np.max(hh[bc>1])*1.2)
+            plt.xlim(bins[0], bins[-1])
+
+            if(col == 2):
+                plt.figure(cdf_fig.number)
+                plt.plot(bc, 1-np.cumsum(hh)/np.sum(hh), label=iso)
+
+
+        plt.figure(pdf_fig.number)
+        plt.plot(bc, tot_hist_dict[col], 'k', label='Total')
+        plt.legend()
+        plt.title(labs[col])
+        plt.xlabel("Momentum [MeV]")
+        plt.ylabel("Counts/(%d MeV)"%binsize)
+
+    plt.figure(cdf_fig.number)
+    plt.plot(bc, 1-np.cumsum(tot_hist_dict[2])/np.sum(tot_hist_dict[2]), 'k', label="Total")
+    plt.xlabel("Momentum [MeV]")
+    plt.ylabel("Survival function (1-CDF)")
+    plt.ylim(0,1)
+    plt.legend()
+    plt.xlim(bins[0], bins[-1])
+    plt.title("1 - CDF for NR momentum")
+
+    plt.figure(x_fig.number)
+    tot_hist = np.zeros(len(bins)-1)
+    for iso in isos_to_use:
+
+        curr_moms = np.array(momentum_dict[iso])
+
+        hh, be = np.histogram(curr_moms[:,3], bins=bins)
+        bc = be[:-1] + np.diff(be)/2
+        tot_hist += hh
+
+        plt.plot(bc, hh, label=iso)
+        plt.xlim(bins[0], bins[-1])
+
+    plt.plot(bc, tot_hist, 'k', label='Total')
+    plt.ylim(0,np.max(tot_hist[bc>1])*1.2)
+    plt.xlabel("$x$ Momentum [MeV]")
+    plt.ylabel("Counts/(%d MeV)"%binsize)
+    plt.legend()
+    plt.title("Projected 1D momentum")
+
+    plt.show()
