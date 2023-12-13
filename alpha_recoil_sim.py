@@ -400,7 +400,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
         if(rad_lims[0] > 0):
             ax2d[-1].set_ylim(rad_lims[0], rad_lims[1])
     ax2d[-1].set_xlim(-0.01*xm, xm)
-    ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
+    #ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
     ax2d[-1].plot([0, xm],[rout, rout], color=outer_sphere_color)
 
     plot_sphere(ax3d, rin, inner_sphere_color)
@@ -438,7 +438,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
             x, y, z = random_point_in_sphere(r_inner)
             curr_mat = mat_inner
         elif(sphere_dict["starting_loc"] == "shell"):
-            x, y, z = random_point_on_surface(r_inner + sphere_dict['outer_shell_thick']/2)
+            x, y, z = random_point_on_surface(r_inner + sphere_dict['outer_shell_thick'] - 1) ## 1 nm from surface
             curr_mat = mat_outer
         else:
             print("Starting location not recognized")
