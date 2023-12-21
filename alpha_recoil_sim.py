@@ -272,14 +272,15 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
 
     return final_traj, final_domain
 
-def plot_circles(ax, rin, rout, cin, cout):
-    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor=cin, linestyle="-")
-    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor=cout, linestyle="-")
+def plot_circles(ax, rin, rout, cin, cout, lw=1):
+    circle_in = plt.Circle((0, 0), rin, facecolor='none', edgecolor=cin, linestyle="-", lw=lw)
+    circle_out = plt.Circle((0, 0), rout, facecolor='none', edgecolor=cout, linestyle="-", lw=lw)
     ax.add_patch(circle_in)
     ax.add_patch(circle_out)
 
 def plot_sphere(ax, r, c, alph=0.5):
     u = np.linspace(0, 2 * np.pi, 100)
+    #u = np.linspace(np.pi/4, 3*np.pi/4, 100)
     v = np.linspace(0, np.pi, 100)
     x = r*np.outer(np.cos(u), np.sin(v))
     y = r*np.outer(np.sin(u), np.sin(v))
@@ -409,7 +410,152 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
     #plt.tight_layout()
     return fig
 
-def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
+def plot_event_row(event_dict_full, idx_list, sd, rad_lims=[], sphere_coords=True):
+
+    # Create a 3D plot
+    fig = plt.figure(figsize=(15,3*len(idx_list)), facecolor='white', layout='constrained')
+    subfigs = fig.subfigures(len(idx_list), 2, wspace=0, hspace=0.05, width_ratios=[1, 2.8])
+    print
+    for j, idx in enumerate(idx_list):
+
+        event_dict = event_dict_full[idx]
+
+        ## single row plot for supplement
+        color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y', 'orange', 'purple']
+        c1_list = [1,2]
+        c2_list = [2,3]
+
+        sphere_colors = {"SiO2": "gray", "Au": "gold", "Ag": "silver"}
+
+        rin = sd['inner_radius']
+        rout = sd['inner_radius'] + sd['outer_shell_thick']
+
+        inner_sphere_color = sphere_colors[sd["inner_material"]]
+        outer_sphere_color = sphere_colors[sd["shell_material"]]
+
+        ax3d = subfigs[j][0].add_subplot(1,1,1, projection='3d')
+        ax2d = subfigs[j][1].subplots(1,3)
+                
+        if(sphere_coords and False):
+            for ax in ax2d[:-1]:
+                plot_circles(ax, rin, rout, inner_sphere_color, outer_sphere_color)
+
+        decays = event_dict.keys()
+        lost_e = 0
+
+        ## plot the starting location of the parent
+        xyz = event_dict['start_pos']
+        ax3d.scatter(xyz[0], xyz[1], xyz[2], 'o', c=color_list[0], label=event_dict['parent']) ## plot the starting location
+        if(sphere_coords):
+            for j,ax in enumerate(ax2d[:-1]):
+                ax.plot(xyz[c1_list[j]-1],xyz[c2_list[j]-1], 'o', color=color_list[0], label=event_dict['parent'])
+        else:
+            for j,ax in enumerate(ax2d[:-1]):
+                ax.plot(0,xyz[j], 'o', color=color_list[0])
+                
+        ax2d[-1].plot(0,np.linalg.norm(xyz),'o', c=color_list[0], label=event_dict['parent'])   
+        data = np.array( [[0, xyz[0], xyz[1], xyz[2]],])
+        curr_lost_e = [0]
+        rad = [np.linalg.norm(xyz)]
+
+        for didx in range(len(decays)-4): ## four non numerical keys
+
+            idx_for_colors = (didx + 1) ## starting isotope is 0
+
+            data = event_dict[didx]['traj']
+
+            if(event_dict[didx]['energy']==0): 
+                ## this is a beta, so just plot its dot at the same position and go on
+                ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', s=2, c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+                if(sphere_coords):
+                    for j,ax in enumerate(ax2d[:-1]):
+                        ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+                else:
+                    for j,ax in enumerate(ax2d[:-1]):
+                        ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', ms=2, color=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+                ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+                continue
+
+
+
+            ## Plot the array in 3D
+            ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[idx_for_colors])
+            ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+
+            ## now plot the radius
+            rad = np.sqrt( data[:,1]**2 + data[:,2]**2 + data[:,3]**2 )
+            curr_lost_e = lost_e + (data[0,0]-data[:,0])
+            ax2d[-1].plot(curr_lost_e, rad, '-', color=color_list[idx_for_colors])
+            ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', color=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+            lost_e = curr_lost_e[-1]
+
+            if(sphere_coords):
+                for j,ax in enumerate(ax2d[:-1]):
+                    ax.plot(data[:,c1_list[j]], data[:,c2_list[j]], '-', color=color_list[idx_for_colors])
+                    ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', color=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+            else:
+                for j,ax in enumerate(ax2d[:-1]):
+                    ax.plot(curr_lost_e, data[:,j+1], '-', color=color_list[idx_for_colors])
+                    ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', color=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+
+        #ax3d.set_xlim(-rout*1.2, rout*1.2)
+        #ax3d.set_ylim(-rout*1.2, rout*1.2)
+        #ax3d.set_zlim(-rout*1.2, rout*1.2)
+        ax3d.set_xlabel('x [nm]')
+        ax3d.set_ylabel('y [nm]')
+        ax3d.set_zlabel('z [nm]')
+        ax2d[-1].legend() #bbox_to_anchor=(1.1, 0.75))
+
+        if(sphere_coords):
+            col_names = ['x', 'y', 'z']
+            for j,ax in enumerate(ax2d[:-1]):
+                c1, c2 = c1_list[j], c2_list[j]
+                ax.set_xlabel(col_names[c1-1] + " [nm]")
+                ax.set_ylabel(col_names[c2-1] + " [nm]")
+                #ax.set_xlim(-rout*1.2, rout*1.2)
+                #ax.set_ylim(-rout*1.2, rout*1.2)
+
+        ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
+        ax2d[-1].set_ylabel('Radius [nm]')
+        xm = curr_lost_e[-1]*1.1
+        #if(len(rad_lims)==0):
+        #    ax2d[-1].set_ylim(0, rout*1.2)
+        #    plt.text(xm*0.99, rin*1.01, sd["inner_material"], va='bottom', ha='right', color='k')
+        #    plt.text(xm*0.99, rout*1.01, sd["shell_material"], va='bottom', ha='right', color='k')
+        #else:
+        #    if(rad_lims[0] > 0):
+        #        ax2d[-1].set_ylim(rad_lims[0], rad_lims[1])
+        #ax2d[-1].set_xlim(-0.01*xm, xm)
+        #ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
+        #ax2d[-1].plot([0, xm],[rout, rout], color=outer_sphere_color)
+
+        #plot_sphere(ax3d, rin, inner_sphere_color)
+
+        for ax in ax2d[:-1]:
+            xx = ax.get_xlim()
+            yy = ax.get_ylim()
+            plot_circles(ax, 0, rout, 'gray', 'gray')
+            ax.set_xlim(xx)
+            ax.set_ylim(yy)
+
+        xx = ax2d[-1].get_xlim()
+        yy = ax2d[-1].get_ylim()
+        plt.plot(xx, [rout, rout], color='gray')
+        ax2d[-1].set_xlim(xx)
+        ax2d[-1].set_ylim(yy)
+
+    #xx = ax3d.get_xlim()
+    #yy = ax3d.get_ylim()
+    #zz = ax3d.get_zlim()
+    #plot_sphere(ax3d, rout, outer_sphere_color, alph=0.02)
+    #ax3d.set_xlim(xx)
+    #ax3d.set_ylim(yy)
+    #ax3d.set_zlim(zz)
+
+    #plt.tight_layout()
+    return fig
+
+def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[]):
     """ Function to simulate the alpha transport through a sphere
     """
 
@@ -431,18 +577,26 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict):
 
         curr_iso = iso ## starting isotope at top of chain
         t = 0 ## start at time zero
-        if("starting_loc" not in sphere_dict.keys()):
-            x, y, z = random_point_in_sphere(r_inner) ## backwards compatibility
-            curr_mat = mat_inner
-        elif(sphere_dict["starting_loc"] == "core"):
-            x, y, z = random_point_in_sphere(r_inner)
-            curr_mat = mat_inner
-        elif(sphere_dict["starting_loc"] == "shell"):
-            x, y, z = random_point_on_surface(r_inner + sphere_dict['outer_shell_thick'] - 1) ## 1 nm from surface
-            curr_mat = mat_outer
+        if(len(start_point)>0):
+            x, y, z = start_point[0], start_point[1], start_point[2]
+            r = np.sqrt(x**2 + y**2 + z**2)
+            if(r <= r_inner):
+                curr_mat = mat_inner
+            else:
+                curr_mat = mat_outer
         else:
-            print("Starting location not recognized")
-            return -1 
+            if("starting_loc" not in sphere_dict.keys()):
+                x, y, z = random_point_in_sphere(r_inner) ## backwards compatibility
+                curr_mat = mat_inner
+            elif(sphere_dict["starting_loc"] == "core"):
+                x, y, z = random_point_in_sphere(r_inner)
+                curr_mat = mat_inner
+            elif(sphere_dict["starting_loc"] == "shell"):
+                x, y, z = random_point_on_surface(r_inner + sphere_dict['outer_shell_thick'] - 1) ## 1 nm from surface
+                curr_mat = mat_outer
+            else:
+                print("Starting location not recognized")
+                return -1 
     
 
         curr_t12 = decay_dict[curr_iso + "_t12"] ## get this to start the while loop
@@ -641,15 +795,11 @@ def reconstruct_momenta(sim_dict, add_noise = 0, binsize=5):
 
                 p_alpha = curr_event[k]['alpha_momentum']
                 p_NR = curr_event[k]['NR_momentum']
-                tot_momentum = p_alpha + p_NR
+                noise_vec = np.random.randn(3)*add_noise
+                tot_momentum = p_alpha + p_NR + noise_vec
 
                 pt, pa, pn = np.linalg.norm(tot_momentum), np.linalg.norm(p_alpha), np.linalg.norm(p_NR)
                 px = np.abs(tot_momentum[0])
-                noise_vec = np.random.randn(4)*add_noise
-                pt += noise_vec[0]
-                pa += noise_vec[1]
-                pn += noise_vec[2]
-                px += noise_vec[3]
 
                 momentum_dict[curr_iso].append([pt, pa, pn, px])
 
@@ -725,7 +875,103 @@ def reconstruct_momenta(sim_dict, add_noise = 0, binsize=5):
     plt.show()
 
 
-def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
+def reconstruct_momenta_2panel(sim_dict, add_noise = 0, binsize=5):
+    """ Take a simulation dictionary and analyze it:
+          1) For each alpha decay, reconstruct the total momentum given to the sphere
+          2) Separate this by isotope
+    """
+
+    isos_to_use = ["Tl-208", 'Pb-208']
+    iso_labels = ["$^{212}$Bi", "$^{212}$Po"]
+
+    momentum_dict = {}
+    for ciso in isos_to_use:
+        momentum_dict[ciso] = []
+
+    num_bad_pts = 0
+    N = len(sim_dict.keys())
+    for i in range(N):
+        curr_event = sim_dict[i]
+
+        for k in curr_event.keys():
+            if(isinstance(k, str)): continue
+
+            curr_iso = curr_event[k]['iso']
+
+            if curr_iso in isos_to_use:
+
+                if( 'alpha_momentum' not in curr_event[k].keys()):
+                    if(curr_event[k]['traj'][0,0]> 0):
+                        num_bad_pts += 1
+                    continue
+
+                p_alpha = curr_event[k]['alpha_momentum']
+                p_NR = curr_event[k]['NR_momentum']
+                noise_vec = np.random.randn(3)*add_noise
+                tot_momentum = p_alpha + p_NR + noise_vec
+
+                pt, pa, pn = np.linalg.norm(tot_momentum), np.linalg.norm(p_alpha), np.linalg.norm(p_NR)
+                px = np.abs(tot_momentum[0])
+
+                momentum_dict[curr_iso].append([pt, pa, pn, px])
+
+    print("Found %d bad points out of %d: %.3f%%"%(num_bad_pts,N,num_bad_pts/N*100))    
+
+    pdf_fig = plt.figure(figsize=(12,4))
+    bins = np.arange(0,550,binsize)
+
+    tot_hist_dict = 0
+
+    for j,iso in enumerate(isos_to_use):
+
+        curr_moms = np.array(momentum_dict[iso])
+
+        hh, be = np.histogram(curr_moms[:,0], bins=bins)
+        bc = be[:-1] + np.diff(be)/2
+
+        tot_hist_dict += hh
+
+        plt.figure(pdf_fig.number)
+        plt.subplot(1,2,1)
+        plt.plot(bc, hh, label=iso_labels[j])
+        plt.ylim(0,np.max(hh[bc>50])*1.5)
+        plt.xlim(bins[0], bins[-1])
+
+
+    plt.plot(bc, tot_hist_dict, 'k', label='Total')
+    #plt.legend()
+    plt.xlabel("Total momentum [MeV]")
+    plt.ylabel("Counts/(%d MeV)"%binsize)
+
+    plt.subplot(1,2,2)
+
+    pdf_dat = []
+
+    tot_hist = np.zeros(len(bins)-1)
+    for j, iso in enumerate(isos_to_use):
+
+        curr_moms = np.array(momentum_dict[iso])
+
+        hh, be = np.histogram(curr_moms[:,3], bins=bins)
+        bc = be[:-1] + np.diff(be)/2
+        tot_hist += hh
+
+        plt.plot(bc, hh, label=iso_labels[j])
+        plt.xlim(bins[0], bins[-1])
+        pdf_dat.append(hh)
+
+    plt.plot(bc, tot_hist, 'k', label='Total')
+    plt.ylim(0,np.max(tot_hist[bc>50])*1.1)
+    plt.xlabel("Projected $x$ momentum [MeV]")
+    plt.ylabel("Counts/(%d MeV)"%binsize)
+    plt.legend()
+    #plt.title("Projected 1D momentum")
+
+    return pdf_fig, bc, pdf_dat
+
+
+
+def analyze_implantation(sim_dict, binsize=2, sphere_rad=1500):
     """ Take a simulation dictionary and analyze it:
           1) For each alpha decay, reconstruct the total momentum given to the sphere
           2) Separate this by isotope
@@ -745,6 +991,9 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
     for iso in isos_to_use:
         implant_rad[iso] = []
 
+    plt.figure(figsize=(10,3.5))
+    plt.subplot(1,2,1)
+
     for i in range(N):
         curr_event = sim_dict[i]
 
@@ -760,28 +1009,61 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
                 dist = np.sqrt( np.sum( (curr_event[k]['traj'][-1, 1:] - curr_event['start_pos'])**2) )
                 implant_distance.append(dist)
 
-    plt.figure()
+                if((i < 1000)):
+                    if(implant_rad[curr_iso][-1] < sphere_rad):
+                        curr_traj = curr_event[k]['traj'][:,1:] # - curr_event[k]['traj'][0,1:] + np.array([3000, 0, 0])
+                        plt.plot(curr_traj[:,0], curr_traj[:,1], 'r', lw=1, alpha=0.1, rasterized=True)
+                        plt.plot(curr_traj[-1,0], curr_traj[-1,1], 'ro', ms=2, alpha=0.1)
+                    else:
+                        curr_traj = curr_event[k]['traj'][:,1:] # - curr_event[k]['traj'][0,1:] + np.array([3000, 0, 0])
+                        plt.plot(curr_traj[:-1,0], curr_traj[:-1,1], 'r', lw=1, alpha=0.1, rasterized=True)
+                        lin_traj = curr_traj[-1,:] - curr_traj[-2,:]
+                        lin_traj_lengthened = 1000*lin_traj
+                        lin_traj_lengthened += curr_traj[-2,:]
+                        lin_traj_lengthened = np.vstack((curr_traj[-2,:], lin_traj_lengthened))
+                        plt.plot(lin_traj_lengthened[:,0], lin_traj_lengthened[:,1], 'r', lw=1, alpha=0.1, rasterized=True)
+                    
+
+    ax = plt.gca()
+    #plot_circles(ax, 0, sphere_rad, 'k', 'k', lw=2)
+    #plt.plot([3000, 3000], [-200, 200])
+    circle_out = plt.Circle((0, 0), sphere_rad, facecolor='gray', edgecolor='k', linestyle="-", lw=2, alpha=0.2)
+    ax.add_patch(circle_out)
+    plt.plot(sphere_rad, 0, 'ko', ms=2)
+    plt.xlim(sphere_rad-150, sphere_rad+50)
+    plt.ylim(-100, 100)
+    plt.xlabel("x [nm]")
+    plt.ylabel("y [nm]")
+    plt.gca().set_aspect('equal')
+
+    plt.subplot(1,2,2)
     implant_r = np.array(implant_rad["Pb-212"])
     implant_distance = np.array(implant_distance)
     implant_cut = implant_r < sphere_rad
     eff = np.sum(implant_cut)/N
     print("Implantation efficiency: ", eff)
 
-    bins = np.arange(2850,3010,binsize)
-    hh, be = np.histogram(implant_r[implant_cut], bins=bins)
+    bins = np.arange(-10, 200, binsize) #sphere_rad-150,sphere_rad+10,binsize)
+    hh, be = np.histogram(sphere_rad - implant_r[implant_cut], bins=bins)
+    depth = sphere_rad - implant_r[implant_cut]
+    print("median: ", np.median(depth), np.percentile(depth, 95))
     bc = be[:-1] + np.diff(be)/2
-    plt.plot(bc, hh, 'k', label="Radial position")
+    plt.step(bc, hh, 'k', where='mid', label="Radial position")
 
-    hhd, bed = np.histogram(sphere_rad - implant_distance[implant_cut], bins=bins)
+    hhd, bed = np.histogram(implant_distance[implant_cut], bins=bins)
     bcd = bed[:-1] + np.diff(bed)/2
-    plt.plot(bcd, hhd, 'r', label="Cartesian distance")
-    plt.legend()
-    plt.xlabel("Distance from center [nm]")
+    plt.step(bcd, hhd, 'tab:orange', where='mid', label="Cartesian distance")
+    #plt.legend()
+    plt.xlabel("Distance [nm]")
     plt.ylabel("Counts/(%d nm)"%binsize)    
-    plt.title("Implantation distribution, efficiency = %.3f"%eff)
+    plt.xlim(0, 120)
+    yy = plt.ylim()
+    plt.ylim(0, yy[1])
+    #plt.title("Implantation distribution, efficiency = %.3f"%eff)
+    plt.savefig("implantation_sim.pdf", bbox_inches='tight')
 
     plt.figure()
-    bins = np.arange(2800,3010,binsize)
+    bins = np.arange(sphere_rad-200,sphere_rad+10,binsize)
     for iso in isos_to_use:
         
         implant_r = np.array(implant_rad[iso])
@@ -795,3 +1077,279 @@ def analyze_implantation(sim_dict, binsize=2, sphere_rad=3000):
     plt.xlabel("Distance from center [nm]")
     plt.ylabel("Counts/(%d nm)"%binsize)  
     plt.show()
+
+def parse_transrec_file(daughtfile, recfile):
+
+    ## parse the transmitted NR for the daughter of the decay (daughtfile)
+    ## and the secondary recoils (recfile)
+
+    A_to_nm = 0.1 #convert angstrom to nm   
+    u_to_GeV = 0.931 # convert amu to GeV
+    eV_to_keV = 1e-3 # convert eV to keV
+
+    daught_dict = {}
+    ## first find the transmitted daughters
+    with open(daughtfile, 'r') as f:
+        daughtlines = f.readlines()
+
+    for l in daughtlines:
+
+        if not l.startswith("T"): continue 
+
+        curr_dat = l.strip().split()
+        if(curr_dat[0] != "T"): 
+            curr_dat.insert(1, curr_dat[0][1:]) # T runs into event id for large ids
+        line_event = int(curr_dat[1])
+    
+        if(len(curr_dat) < 10): 
+            print("Bad line: ", line_event)
+            continue
+
+        Z = int(curr_dat[2])
+        if( Z == 81):
+            A = 208 * u_to_GeV 
+        elif( Z == 82):
+            A = 208 * u_to_GeV
+        else:
+            print("Unknown Z: ", Z)
+            return
+        
+        E = float(curr_dat[3]) * eV_to_keV
+        p = np.sqrt(2 * E * A) ## in MeV
+
+        daught_dict[line_event] = [Z, A, p, float(curr_dat[4])*A_to_nm, float(curr_dat[5])*A_to_nm, float(curr_dat[6])*A_to_nm,
+                                            float(curr_dat[7]), float(curr_dat[8]), float(curr_dat[9])]
+
+    with open(recfile, 'r') as f:
+        reclines = f.readlines()
+
+    event_dict = {}
+    curr_event = -1
+    for l in reclines:
+
+        if not l.startswith("0"): continue 
+
+        curr_dat = l.strip().split()
+        line_event = int(curr_dat[0])
+
+        if(line_event not in event_dict.keys()):
+            event_dict[line_event] = {}
+        
+        if(len(curr_dat) == 7):
+
+            ## fix rare issue with SRIM files
+            try:
+                test = [float(curr_dat[1]), float(curr_dat[2]), float(curr_dat[3]), float(curr_dat[4])]
+            except:
+                continue
+
+            ## this is the ion trajectory, so save into the traj
+            recoil_data = [float(curr_dat[1]), float(curr_dat[2])*A_to_nm, 
+                           float(curr_dat[3])*A_to_nm, float(curr_dat[4])*A_to_nm]
+            
+            if( abs(line_event - curr_event) < 0.1):
+                event_dict[line_event]['traj'].append(recoil_data)
+            else:
+                curr_event = line_event
+                event_dict[line_event]['traj'] = [recoil_data,]
+
+        elif(len(curr_dat) == 9):
+            ## this is a transmitted ion
+
+            Z = int(curr_dat[1])
+            if( Z == 14):
+                A = 28.0855 * u_to_GeV
+            elif( Z == 8):
+                A = 15.999 * u_to_GeV
+            else:
+                print("Unknown Z: ", Z)
+                return
+            
+            E = float(curr_dat[2]) * eV_to_keV
+            p = np.sqrt(2 * E * A) ## in MeV
+
+            recoil_data = [Z, A, p, float(curr_dat[3])*A_to_nm, float(curr_dat[4])*A_to_nm, float(curr_dat[5])*A_to_nm,
+                                    float(curr_dat[6]), float(curr_dat[7]), float(curr_dat[8])]
+
+            if( abs(line_event - curr_event) < 0.1 and 'recoil' in event_dict[line_event].keys()):
+                event_dict[line_event]['recoil'].append(recoil_data)
+            else:
+                if( line_event % 10000 == 0 ): 
+                    print("Working on event %d"%(line_event))
+                curr_event = line_event
+                event_dict[line_event]['recoil'] = [recoil_data,]
+
+    return daught_dict, event_dict
+
+def analyze_trans_data(daught_dict, recoil_dict):
+    ## analyze the data regarding transmitted daughters and secondary recoils
+
+    ## first find the distribution of number
+    last_event = list(recoil_dict.keys())[-1]
+    si_recoils = []
+    o_recoils = []
+
+    daughter_momentum = []
+    secondary_momentum = []
+    daughter_alpha_mom = []
+    total_momentum = []
+
+    for k in range(1,last_event+1):
+
+        traj = np.array(recoil_dict[k]['traj'])
+        if(np.shape(traj)[0] < 2): continue
+        alpha_vec = traj[0,1:]-traj[1,1:]
+        alpha_vec = alpha_vec/np.linalg.norm(alpha_vec)
+        p_alpha = 265*alpha_vec
+
+        if('recoil' not in recoil_dict[k].keys()): 
+            si_recoils.append(0)
+            o_recoils.append(0)
+
+            if(k in daught_dict.keys()):
+                daughter_momentum.append(daught_dict[k][2])
+                total_momentum.append(daught_dict[k][2])
+            else:
+                daughter_momentum.append(0)
+                total_momentum.append(0)
+
+            secondary_momentum.append(0)
+
+        else:
+            recoils = np.array(recoil_dict[k]['recoil'])
+            n_si = np.sum(recoils[:,0] == 14)
+            n_o = np.sum(recoils[:,0] == 8)
+            si_recoils.append(n_si)
+            o_recoils.append(n_o)
+
+            if(k in daught_dict.keys()):
+                dm = np.array(daught_dict[k][6:])*daught_dict[k][2]
+            else:
+                dm = np.array([0.0, 0.0, 0.0])
+
+            sm = np.array([0.0, 0.0, 0.0])
+            for recoil in recoils:
+                p_recoil = recoil[2]
+                recoil_vec = np.array(recoil[6:])
+                sm += p_recoil*recoil_vec
+
+            daughter_momentum.append(np.linalg.norm(dm))
+            secondary_momentum.append(np.linalg.norm(sm))
+            total_momentum.append(np.linalg.norm(dm + sm + p_alpha))
+            daughter_alpha_mom.append(np.linalg.norm(dm + p_alpha))
+    
+    hsi, besi = np.histogram(si_recoils, bins=np.arange(-0.5, 40.5, 1))
+    ho, beo = np.histogram(o_recoils, bins=np.arange(-0.5, 40.5, 1))
+
+    hsi = hsi/last_event
+    ho = ho/last_event
+
+    plt.figure()
+    plt.step(besi[:-1], hsi, 'tab:red', where='post', label="Si")
+    plt.step(beo[:-1], ho, 'tab:orange', where='post', label="O")
+    plt.xlim(-0.5,40)
+    plt.gca().set_yscale('log')
+    plt.legend()
+    plt.xlabel("Number of ejected secondary recoils")
+    plt.ylabel("Fraction of events")
+
+    bin_size = 10
+    pmax = 500
+    bins = np.arange(0,pmax,bin_size)
+    hd, bed = np.histogram(daughter_momentum, bins=bins)
+    hs, bes = np.histogram(secondary_momentum, bins=bins)
+    hda, beda = np.histogram(daughter_alpha_mom, bins=bins)
+    ht, bet = np.histogram(total_momentum, bins=bins)
+
+    plt.figure()
+    plt.step(bed[:-1], hd/last_event, 'b', where='post', label="Daughter")
+    plt.step(beda[:-1], hda/last_event, 'b:', where='post', label="Daughter + $\\alpha$")
+    plt.step(bes[:-1], hs/last_event, 'r', where='post', label="Secondary")
+    plt.step(bet[:-1], ht/last_event, 'k', where='post', label="Total")
+    plt.xlim(0,pmax)
+    #plt.gca().set_yscale('log')
+    plt.legend()
+    plt.xlabel("Momentum from ejected nuclei [MeV]")
+    plt.ylabel("Fraction of events/(%d MeV)"%bin_size)
+
+
+def plot_transmitted(daught_dict, recoil_dict, event_num, sphere_rad=1500, sim_thick=30):
+
+    iso_dict = {14: ["Si", 'tab:red'], 8: ["O", 'tab:orange']}
+
+    if(event_num in daught_dict.keys()):
+        daught_dat = daught_dict[event_num]
+    else:
+        daught_dat = np.zeros(9)
+
+    recoils = np.array(recoil_dict[event_num]['recoil'])
+    traj = np.array(recoil_dict[event_num]['traj'])
+
+    fig = plt.figure()
+
+    norm = 1 ## for plotting
+
+    traj[:,1] += sphere_rad-sim_thick
+    #print(traj)
+    plt.plot(traj[:,1], traj[:,2], 'k', lw=1)
+
+
+    if(np.shape(traj)[0] > 1): 
+        alpha_vec = traj[0,1:]-traj[1,1:]
+        alpha_vec = alpha_vec/np.linalg.norm(alpha_vec)
+        p_alpha = 265
+
+        plt.arrow(traj[0][1], traj[0][2], p_alpha*alpha_vec[0]*norm, p_alpha*alpha_vec[1]*norm, 
+              width=0.5, head_width=3, color='gray')
+
+
+
+    ptot = np.array([0.0,0.0,0.0])
+
+    ## now do the secondaries
+    for recoil in recoils:
+        Z = recoil[0]
+        p_recoil = recoil[2]
+        daught_pos = np.array(recoil[3:6])
+        daught_pos[0] += sphere_rad-sim_thick
+        daught_vec = np.array(recoil[6:])
+        plt.arrow(daught_pos[0], daught_pos[1], daught_vec[0]*p_recoil*norm, daught_vec[1]*p_recoil*norm, width=0.5, head_width=3, color=iso_dict[Z][1])
+        #print(recoil)
+
+        ptot += p_recoil*daught_vec
+
+    p_daught = daught_dat[2]
+    daught_pos = np.array(daught_dat[3:6])
+    daught_pos[0] += sphere_rad-sim_thick
+    daught_vec = np.array(daught_dat[6:])
+
+    plt.arrow(daught_pos[0], daught_pos[1], daught_vec[0]*p_daught*norm, daught_vec[1]*p_daught*norm, 
+              width=0.5, head_width=3, color='k', label=r"$|\vec{p}| = %.1f$ MeV"%p_daught)
+
+    alpha_recoil_mom_x = p_alpha*alpha_vec[0] + daught_vec[0]*p_daught
+    alpha_recoil_mom_y = p_alpha*alpha_vec[1] + daught_vec[1]*p_daught
+    alpha_recoil_mom_z = p_alpha*alpha_vec[2] + daught_vec[2]*p_daught
+    plt.arrow(traj[0][1], traj[0][2], alpha_recoil_mom_x*norm, alpha_recoil_mom_y*norm,
+              width=0.5, head_width=3, color='b')
+    
+    tot_mom_x = ptot[0] + alpha_recoil_mom_x
+    tot_mom_y = ptot[1] + alpha_recoil_mom_y
+    tot_mom_z = ptot[2] + alpha_recoil_mom_z
+    ptot_mag = np.sqrt(tot_mom_x**2 + tot_mom_y**2 + tot_mom_z**2)
+    plt.arrow(traj[0][1], traj[0][2], tot_mom_x*norm, tot_mom_y*norm,
+              width=0.5, head_width=3, color='g', label=r"$|\vec{p}| = %.1f$ MeV"%ptot_mag)
+
+    ax = plt.gca()
+    circle_out = plt.Circle((0, 0), sphere_rad, facecolor='gray', edgecolor='k', linestyle="-", lw=2, alpha=0.2)
+    ax.add_patch(circle_out)
+
+    plt.xlim(sphere_rad-150, sphere_rad+150)
+    plt.ylim(-100, 100)
+    plt.xlabel("x [nm]")
+    plt.ylabel("y [nm]")
+    plt.gca().set_aspect('equal')
+    plt.title("Total momentum = %.1f MeV"%np.linalg.norm(ptot + daught_vec*p_daught))
+    plt.legend()
+
+    return fig
+        
