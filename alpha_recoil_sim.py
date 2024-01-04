@@ -1,6 +1,7 @@
 ## set of helper functions for simulating escape of nuclear recoils from silica spheres
 import numpy as np
 import matplotlib.pyplot as plt
+import pickle
 
 ## conversions of hours, days, years to seconds
 seconds_dict = {"s": 1, "m": 60, "h": 3600, "d": 3600*24, "y": 3600*24*365.24} 
@@ -574,6 +575,8 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[]):
     output_record = {}
 
     for n in range(nmc):
+        
+        if(n%int(1e6) == 0): print("MC iteration: ", n, " of ", nmc)
 
         curr_iso = iso ## starting isotope at top of chain
         t = 0 ## start at time zero
@@ -764,7 +767,7 @@ def analyze_simulation(sim_dict, sphere_dict=[]):
     #plt.ylabel("Counts/[2 nm]")
     #plt.show()
 
-def reconstruct_momenta(sim_dict, add_noise = 0, binsize=5):
+def reconstruct_momenta(sim_dict, add_noise = {'x': [0], 'y': [0], 'z': 0}, binsize=5):
     """ Take a simulation dictionary and analyze it:
           1) For each alpha decay, reconstruct the total momentum given to the sphere
           2) Separate this by isotope
@@ -795,7 +798,12 @@ def reconstruct_momenta(sim_dict, add_noise = 0, binsize=5):
 
                 p_alpha = curr_event[k]['alpha_momentum']
                 p_NR = curr_event[k]['NR_momentum']
-                noise_vec = np.random.randn(3)*add_noise
+                coord_noise_vec = []
+                for coord in ['x', 'y', 'z']:
+                    curr_noise = np.random.choice(add_noise[coord])
+                    coord_noise_vec.append(curr_noise)
+
+                noise_vec = np.random.randn(3)*coord_noise_vec 
                 tot_momentum = p_alpha + p_NR + noise_vec
 
                 pt, pa, pn = np.linalg.norm(tot_momentum), np.linalg.norm(p_alpha), np.linalg.norm(p_NR)
@@ -875,7 +883,7 @@ def reconstruct_momenta(sim_dict, add_noise = 0, binsize=5):
     plt.show()
 
 
-def reconstruct_momenta_2panel(sim_dict, add_noise = 0, binsize=5):
+def reconstruct_momenta_2panel(file_base, nfiles, add_noise = {'x': [0], 'y': [0], 'z': 0}, binsize=5):
     """ Take a simulation dictionary and analyze it:
           1) For each alpha decay, reconstruct the total momentum given to the sphere
           2) Separate this by isotope
@@ -883,65 +891,91 @@ def reconstruct_momenta_2panel(sim_dict, add_noise = 0, binsize=5):
 
     isos_to_use = ["Tl-208", 'Pb-208']
     iso_labels = ["$^{212}$Bi", "$^{212}$Po"]
+    colors = ['tab:red', 'orange']
+
+    tag = 'Po-216_SiO2'
 
     momentum_dict = {}
     for ciso in isos_to_use:
         momentum_dict[ciso] = []
 
     num_bad_pts = 0
-    N = len(sim_dict.keys())
-    for i in range(N):
-        curr_event = sim_dict[i]
 
-        for k in curr_event.keys():
-            if(isinstance(k, str)): continue
+    for nf in range(nfiles):
+        print("Loading file %d of %d"%(nf+1, nfiles))
 
-            curr_iso = curr_event[k]['iso']
+        with open(file_base%nf, 'rb') as f:
+            sim_dict = pickle.load(f)
 
-            if curr_iso in isos_to_use:
+        N = len(sim_dict[tag].keys())
+        for i in range(int(N/1)):
+            curr_event = sim_dict[tag][i]
 
-                if( 'alpha_momentum' not in curr_event[k].keys()):
-                    if(curr_event[k]['traj'][0,0]> 0):
-                        num_bad_pts += 1
-                    continue
+            for k in curr_event.keys():
+                if(isinstance(k, str)): continue
 
-                p_alpha = curr_event[k]['alpha_momentum']
-                p_NR = curr_event[k]['NR_momentum']
-                noise_vec = np.random.randn(3)*add_noise
-                tot_momentum = p_alpha + p_NR + noise_vec
+                curr_iso = curr_event[k]['iso']
 
-                pt, pa, pn = np.linalg.norm(tot_momentum), np.linalg.norm(p_alpha), np.linalg.norm(p_NR)
-                px = np.abs(tot_momentum[0])
+                if curr_iso in isos_to_use:
 
-                momentum_dict[curr_iso].append([pt, pa, pn, px])
+                    if( 'alpha_momentum' not in curr_event[k].keys()):
+                        if(curr_event[k]['traj'][0,0]> 0):
+                            num_bad_pts += 1
+                        continue
+
+                    p_alpha = curr_event[k]['alpha_momentum']
+                    p_NR = curr_event[k]['NR_momentum']
+                    coord_noise_vec = []
+                    for coord in ['x', 'y', 'z']:
+                        curr_noise = np.random.choice(add_noise[coord])
+                        coord_noise_vec.append(curr_noise)
+
+                    noise_vec = np.random.randn(3)*coord_noise_vec 
+
+                    tot_momentum = p_alpha + p_NR + noise_vec
+
+                    pt, pa, pn = np.linalg.norm(tot_momentum), np.linalg.norm(p_alpha), np.linalg.norm(p_NR)
+                    px = np.abs(tot_momentum[0])
+
+                    momentum_dict[curr_iso].append([pt, pa, pn, px])
 
     print("Found %d bad points out of %d: %.3f%%"%(num_bad_pts,N,num_bad_pts/N*100))    
 
-    pdf_fig = plt.figure(figsize=(12,4))
-    bins = np.arange(0,550,binsize)
+    pdf_fig = plt.figure(figsize=(11,2.67*11/8))
+    bins = np.arange(0,600,binsize)
 
     tot_hist_dict = 0
+
+    norm_fac = 0
+    for j,iso in enumerate(isos_to_use):
+        curr_moms = np.array(momentum_dict[iso])
+        norm_fac += len(curr_moms[:,0])
 
     for j,iso in enumerate(isos_to_use):
 
         curr_moms = np.array(momentum_dict[iso])
 
         hh, be = np.histogram(curr_moms[:,0], bins=bins)
+        bsize = be[1]-be[0]
+        hh = 1.0*hh/norm_fac ## density
         bc = be[:-1] + np.diff(be)/2
 
         tot_hist_dict += hh
 
         plt.figure(pdf_fig.number)
         plt.subplot(1,2,1)
-        plt.plot(bc, hh, label=iso_labels[j])
-        plt.ylim(0,np.max(hh[bc>50])*1.5)
+        plt.plot(bc, hh/bsize, label=iso_labels[j], color=colors[j])
+        plt.fill_between(bc, np.zeros_like(bc), hh/bsize, color=colors[j], alpha=0.4, edgecolor=None)
         plt.xlim(bins[0], bins[-1])
 
 
-    plt.plot(bc, tot_hist_dict, 'k', label='Total')
+    plt.plot(bc, tot_hist_dict/bsize, 'k', label='Total')
     #plt.legend()
-    plt.xlabel("Total momentum [MeV]")
-    plt.ylabel("Counts/(%d MeV)"%binsize)
+    plt.ylim(0,0.008)
+    plt.xlim(0,500)
+    plt.xlabel("Total momentum [MeV/c]")
+    #plt.ylabel("Counts/(%d MeV/c)"%binsize)
+    plt.ylabel("Probability density [(MeV/c)$^{-1}$]")
 
     plt.subplot(1,2,2)
 
@@ -953,17 +987,23 @@ def reconstruct_momenta_2panel(sim_dict, add_noise = 0, binsize=5):
         curr_moms = np.array(momentum_dict[iso])
 
         hh, be = np.histogram(curr_moms[:,3], bins=bins)
+        bsize = be[1]-be[0]
+        hh = 1.0*hh/norm_fac ## density
         bc = be[:-1] + np.diff(be)/2
         tot_hist += hh
 
-        plt.plot(bc, hh, label=iso_labels[j])
+        plt.plot(bc, hh/bsize, label=iso_labels[j], color=colors[j])
+        plt.fill_between(bc, np.zeros_like(bc), hh/bsize, color=colors[j], alpha=0.4, edgecolor=None)
         plt.xlim(bins[0], bins[-1])
         pdf_dat.append(hh)
 
-    plt.plot(bc, tot_hist, 'k', label='Total')
-    plt.ylim(0,np.max(tot_hist[bc>50])*1.1)
-    plt.xlabel("Projected $x$ momentum [MeV]")
-    plt.ylabel("Counts/(%d MeV)"%binsize)
+    plt.plot(bc, tot_hist/bsize, 'k', label='Total')
+    #plt.ylim(0,np.max(tot_hist[bc>50])*1.1)
+    plt.ylim(0,0.006)
+    plt.xlim(0,500)
+    plt.xlabel("Projected $x$ momentum [MeV/c]")
+    #plt.ylabel("Counts/(%d MeV/c)"%binsize)
+    plt.ylabel("Probability density [(MeV/c)$^{-1}$]", labelpad=0)
     plt.legend()
     #plt.title("Projected 1D momentum")
 
