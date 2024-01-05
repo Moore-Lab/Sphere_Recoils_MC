@@ -971,7 +971,7 @@ def reconstruct_momenta_2panel(file_base, nfiles, add_noise = {'x': [0], 'y': [0
 
     plt.plot(bc, tot_hist_dict/bsize, 'k', label='Total')
     #plt.legend()
-    plt.ylim(0,0.008)
+    plt.ylim(0,0.01)
     plt.xlim(0,500)
     plt.xlabel("Total momentum [MeV/c]")
     #plt.ylabel("Counts/(%d MeV/c)"%binsize)
