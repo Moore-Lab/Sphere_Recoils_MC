@@ -14,7 +14,7 @@ Atom 1 = O =         8  15.999
 Atom 2 = Si =       14  28.086
 Layer   Layer Name /               Width Density      O(8)  Si(14)
 Numb.   Description                (Ang) (g/cm3)    Stoich  Stoich
- 1      "SiO2 - Stober"           2000  2 .666667 .333333
+ 1      "SiO2 - Stober"            2000 2 .666667 .333333 
 0  Target layer phases (0=Solid, 1=Gas)
 0 
 Target Compound Corrections (Bragg)

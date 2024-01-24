@@ -1,0 +1,35 @@
+==> SRIM-2013.00 This file controls TRIM Calculations.
+Ion: Z1 ,  M1,  Energy (keV), Angle,Number,Bragg Corr,AutoSave Number.
+    88    223    200    0    10000    1    10000
+Cascades(1=No;2=Full;3=Sputt;4-5=Ions;6-7=Neutrons), Random Number Seed, Reminders
+                      1                                   0       0
+Diskfiles (0=no,1=yes): Ranges, Backscatt, Transmit, Sputtered, Collisions(1=Ion;2=Ion+Recoils), Special EXYZ.txt file
+                          0       0           0       0               0                               1000
+Target material : Number of Elements & Layers
+"Ra-223 (200) into Skeletal Muscle (W&W Type 1"       8               1
+PlotType (0-5); Plot Depths: Xmin, Xmax(Ang.) [=0 0 for Viewing Full Target]
+       0                         0         3000000
+Target Elements:    Z   Mass(amu)
+Atom 1 = H =         1   1.008
+Atom 2 = C =         6  12.011
+Atom 3 = N =         7  14.007
+Atom 4 = O =         8  15.999
+Atom 5 = K =        19  39.098
+Atom 6 = S =        16  32.066
+Atom 7 = P =        15  30.974
+Atom 8 = Cl =       17  35.453
+Layer   Layer Name /               Width Density      H(1)    C(6)    N(7)    O(8)   K(19)   S(16)   P(15)  Cl(17)
+Numb.   Description                (Ang) (g/cm3)    Stoich  Stoich  Stoich  Stoich  Stoich  Stoich  Stoich  Stoich
+ 1      "Skeletal Muscle (W&W Type 1)"            3000 1.05 .626791 .089059 .016078 .266266 .00064 .000585 .000404 .000176 
+0  Target layer phases (0=Solid, 1=Gas)
+0 
+Target Compound Corrections (Bragg)
+ 1  
+Individual target atom displacement energies (eV)
+      10      28      28      28      25      25      25      25
+Individual target atom lattice binding energies (eV)
+       3       3       3       3       3       3       3       3
+Individual target atom surface binding energies (eV)
+       2    7.41       2       2     .93    2.88    3.27       2
+Stopping Power Version (1=2011, 0=2011)
+ 0 

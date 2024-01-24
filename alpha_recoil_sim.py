@@ -49,7 +49,7 @@ def parse_decay_chain(file):
 
     return decay_chain_dict
     
-iso_Z_dict = {"Pb": 82, "Fr": 87, "At": 85, "Bi": 83, "Tl": 81, "Ra": 88, "Rn": 86, "Po": 84}
+iso_Z_dict = {"Pb": 82, "Fr": 87, "At": 85, "Bi": 83, "Tl": 81, "Ra": 88, "Rn": 86, "Po": 84, "He": 4}
 
 def get_Z_A_for_iso(iso):
     symbol = iso[:2]
@@ -891,7 +891,8 @@ def reconstruct_momenta_2panel(file_base, nfiles, add_noise = {'x': [0], 'y': [0
 
     isos_to_use = ["Tl-208", 'Pb-208']
     iso_labels = ["$^{212}$Bi", "$^{212}$Po"]
-    colors = ['tab:red', 'orange']
+    colors = ['darkorange', 'orange']
+    alphas = [0.6, 0.3]
 
     tag = 'Po-216_SiO2'
 
@@ -992,8 +993,8 @@ def reconstruct_momenta_2panel(file_base, nfiles, add_noise = {'x': [0], 'y': [0
         bc = be[:-1] + np.diff(be)/2
         tot_hist += hh
 
-        plt.plot(bc, hh/bsize, label=iso_labels[j], color=colors[j])
-        plt.fill_between(bc, np.zeros_like(bc), hh/bsize, color=colors[j], alpha=0.4, edgecolor=None)
+        plt.plot(bc, hh/bsize, label=iso_labels[j], color=colors[j], alpha=1.5*alphas[j])
+        plt.fill_between(bc, np.zeros_like(bc), hh/bsize, color=colors[j], alpha=alphas[j], edgecolor=None)
         plt.xlim(bins[0], bins[-1])
         pdf_dat.append(hh)
 
