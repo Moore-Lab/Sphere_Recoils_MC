@@ -315,7 +315,7 @@ def plot_sphere(ax, r, c, alph=0.5):
     # plot sphere with transparency
     ax.plot_surface(x, y, z, alpha=alph, color=c)
 
-def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
+def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=False):
 
     color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y', 'orange', 'purple']
     c1_list = [1,2,1]
@@ -364,6 +364,10 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
         idx_for_colors = (didx + 1) ## starting isotope is 0
 
         data = event_dict[didx]['traj']
+        if('traj_alpha' in event_dict[didx].keys()):
+            alpha_data = event_dict[didx]['traj_alpha']
+        else:
+            alpha_data = None ## this was a beta or not saved
 
         if(event_dict[didx]['energy']==0): 
             ## this is a beta, so just plot its dot at the same position and go on
@@ -382,6 +386,9 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True):
         ## Plot the array in 3D
         ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[idx_for_colors])
         ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+
+        if(plot_alphas and alpha_data is not None):
+            ax3d.plot3D(alpha_data[:,1], alpha_data[:,2], alpha_data[:,3], c=color_list[idx_for_colors], ls=':')
 
         ## now plot the radius
         rad = np.sqrt( data[:,1]**2 + data[:,2]**2 + data[:,3]**2 )
