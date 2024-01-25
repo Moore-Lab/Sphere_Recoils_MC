@@ -197,9 +197,29 @@ def check_is_stopped(traj, rin, rout):
     if( rad[0] <= rin ):
         cross = first_upward_crossing_time(rad, rin)
         final_domain = 1
+    elif( rad[0] <= rout ):
+        cross_down = first_downward_crossing_time(rad, rin)
+        cross_up = first_upward_crossing_time(rad, rout)
+        
+        if(cross_down and not cross_up):
+            final_domain = 0
+            cross = cross_down
+        elif(cross_up and not cross_down):
+            final_domain = 2
+            cross = cross_up
+        elif(cross_up and cross_down):
+            if(cross_down < cross_up):
+                final_domain = 0
+                cross = cross_down
+            else:
+                final_domain = 2
+                cross = cross_up
+        else:
+            final_domain = 1
+            cross = None
     else:
-        cross = first_downward_crossing_time(rad, rin)
-        final_domain = 0
+        cross = first_downward_crossing_time(rad, rout)
+        final_domain = 1
 
     if(cross and traj[cross,0]>1.0): ## make sure it crosses with at least 1 keV
         is_stopped = False
@@ -230,7 +250,7 @@ def get_euler_for_two_traj(vec1, vec2):
 
     return np.array(R)
 
-def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRAJ):
+def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRAJ, traj_dict_ext=None):
     """ Follows a trajectory back and forth until it ends in the same domain
         it started
     """
@@ -252,6 +272,11 @@ def follow_trajectory(traj, rin, rout, traj_dict_in, traj_dict_out, NUM_SRIM_TRA
             dict_to_use = traj_dict_in
         elif(final_domain == 1):
             dict_to_use = traj_dict_out
+        elif(final_domain == 2):
+            dict_to_use = traj_dict_ext
+
+        if(not dict_to_use): ## we're outside the sphere, and not interested in the trajectory
+            break
 
         ## get new trajectory in the relevant domain
         new_traj = dict_to_use[np.random.choice(NUM_SRIM_TRAJ)+1]
@@ -556,7 +581,7 @@ def plot_event_row(event_dict_full, idx_list, sd, rad_lims=[], sphere_coords=Tru
     #plt.tight_layout()
     return fig
 
-def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[]):
+def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], exterior_mat='vacuum', simulate_alpha=False):
     """ Function to simulate the alpha transport through a sphere
     """
 
@@ -658,16 +683,47 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[]):
             init_alpha_momentum_dir = init_alpha_momentum_dir/np.linalg.norm(init_alpha_momentum_dir)
             decay_record['alpha_momentum'] = np.sqrt(2 * decay_alpha_energy * alpha_mass) * init_alpha_momentum_dir
 
+            if(simulate_alpha):
+                traj_dict_alpha = MC_dict['He-4_' + curr_mat]
+                traj_idx_alpha = np.random.choice(NUM_SRIM_TRAJ)+1
+                curr_traj_full_alpha = traj_dict_alpha[traj_idx_alpha]
+                shortened_traj_alpha = select_end_of_traj(curr_traj_full_alpha, decay_alpha_energy, True, init_xyz, prior_traj=-shortened_traj)
+
+                ## get the trajectory for the alpha
+                traj_dict_inner_alpha = MC_dict['He-4_' + mat_inner]
+                traj_dict_outer_alpha = MC_dict['He-4_' + mat_outer]
+                if(exterior_mat != 'vacuum'):
+                    traj_dict_ext_alpha = MC_dict['He-4_' + exterior_mat]
+                else:
+                    traj_dict_ext_alpha = None
+
+                ## follow trajectory until it stops
+                final_traj_alpha, final_domain_alpha = follow_trajectory(shortened_traj_alpha, r_inner, r_outer, 
+                                                                            traj_dict_inner_alpha, traj_dict_outer_alpha, NUM_SRIM_TRAJ,
+                                                                            traj_dict_ext=traj_dict_ext_alpha)
+                decay_record['traj_alpha'] = final_traj_alpha
+                decay_record['final_domain_alpha'] = final_domain_alpha
+            else:
+                decay_record['traj_alpha'] = None
+                decay_record['final_domain_alpha'] = None
+
+
             traj_dict_inner = MC_dict[decay_daughter + '_' + mat_inner]
             traj_dict_outer = MC_dict[decay_daughter + '_' + mat_outer]
+            if(exterior_mat != 'vacuum'):
+                traj_dict_ext = MC_dict[decay_daughter + '_' + exterior_mat]
+            else:
+                traj_dict_ext = None
+
             ## follow trajectory until it stops
             final_traj, final_domain = follow_trajectory(shortened_traj, r_inner, r_outer, 
-                                                         traj_dict_inner, traj_dict_outer, NUM_SRIM_TRAJ)
+                                                         traj_dict_inner, traj_dict_outer, NUM_SRIM_TRAJ,
+                                                         traj_dict_ext=traj_dict_ext)
 
-            ## shorten trajectory if it exited the sphere
+            ## shorten trajectory if it exited the sphere (assuming we aren't simulating exterior)
             traj_rad = np.sqrt(final_traj[:, 1]**2 + final_traj[:, 2]**2 + final_traj[:, 3]**2)
             exit_idx = np.where(traj_rad > r_outer)[0]
-            if(len(exit_idx)>0):
+            if(len(exit_idx)>0 and not traj_dict_ext):
                 final_traj = final_traj[:(exit_idx[0]+1), :]
                 final_domain = 2 ## vacuum
                 final_momentum = np.sqrt(2*daughter_mass*final_traj[-1,0]) ## in MeV
