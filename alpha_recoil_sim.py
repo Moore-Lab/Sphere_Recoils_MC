@@ -359,6 +359,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
     curr_lost_e = [0]
     rad = [np.linalg.norm(xyz)]
 
+    xext, yext, zext  = [1e20,-1e20], [1e20,-1e20], [1e20,-1e20]
     for didx in range(len(decays)-4): ## four non numerical keys
 
         idx_for_colors = (didx + 1) ## starting isotope is 0
@@ -372,6 +373,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
         if(event_dict[didx]['energy']==0): 
             ## this is a beta, so just plot its dot at the same position and go on
             ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', s=2, c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+
             if(sphere_coords):
                 for j,ax in enumerate(ax2d[:-1]):
                     ax.plot(data[-1,c1_list[j]], data[-1,c2_list[j]], 'o', ms=2, color=color_list[idx_for_colors])
@@ -381,11 +383,17 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
             ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors])
             continue
 
-
-
         ## Plot the array in 3D
         ax3d.plot3D(data[:,1], data[:,2], data[:,3], c=color_list[idx_for_colors])
         ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
+        
+        if(np.max(data[:,1]) > xext[1]): xext[1] = np.max(data[:,1])
+        if(np.min(data[:,1]) < xext[0]): xext[0] = np.min(data[:,1])
+        if(np.max(data[:,2]) > yext[1]): yext[1] = np.max(data[:,2])
+        if(np.min(data[:,2]) < yext[0]): yext[0] = np.min(data[:,2])
+        if(np.max(data[:,3]) > zext[1]): zext[1] = np.max(data[:,3])
+        if(np.min(data[:,3]) < zext[0]): zext[0] = np.min(data[:,3])
+
 
         if(plot_alphas and alpha_data is not None):
             ax3d.plot3D(alpha_data[:,1], alpha_data[:,2], alpha_data[:,3], c=color_list[idx_for_colors], ls=':')
@@ -406,6 +414,11 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
                 ax.plot(curr_lost_e, data[:,j+1], '-', color=color_list[idx_for_colors])
                 ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', color=color_list[idx_for_colors])
 
+        if(sphere_coords):
+            for j,ax in enumerate(ax2d[:-1]):
+                if(plot_alphas and alpha_data is not None):
+                    ax.plot(alpha_data[:,c1_list[j]], alpha_data[:,c2_list[j]], c=color_list[idx_for_colors], ls=':')
+
     ax3d.set_xlim(-rout*1.2, rout*1.2)
     ax3d.set_ylim(-rout*1.2, rout*1.2)
     ax3d.set_zlim(-rout*1.2, rout*1.2)
@@ -414,6 +427,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
     ax3d.set_zlabel('z [nm]')
     ax3d.legend(bbox_to_anchor=(1.3, 0.5))
 
+    lims = [xext, yext, zext]
+    print(lims)
     if(sphere_coords):
         col_names = ['x', 'y', 'z']
         for j,ax in enumerate(ax2d[:-1]):
@@ -422,6 +437,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
             ax.set_ylabel(col_names[c2-1] + " [nm]")
             #ax.set_xlim(-rout*1.2, rout*1.2)
             #ax.set_ylim(-rout*1.2, rout*1.2)
+            ax.set_xlim(lims[c1-1][0]-10, lims[c1-1][1]+10 )
+            ax.set_ylim(lims[c2-1][0]-10, lims[c2-1][1]+10 )
 
     ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
     ax2d[-1].set_ylabel('Radius [nm]')
@@ -686,7 +703,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], exter
 
             ## essentially the alpha leaves with negligible momentum loss, eventually can add a real
             ## SRIM sim for this
-            init_alpha_momentum_dir = -(shortened_traj[-1,1:4] - shortened_traj[-2,1:4])
+            init_alpha_momentum_dir = -(shortened_traj[1,1:4] - shortened_traj[0,1:4])
             init_alpha_momentum_dir = init_alpha_momentum_dir/np.linalg.norm(init_alpha_momentum_dir)
             decay_record['alpha_momentum'] = np.sqrt(2 * decay_alpha_energy * alpha_mass) * init_alpha_momentum_dir
 
@@ -694,7 +711,8 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], exter
                 traj_dict_alpha = MC_dict['He-4_' + curr_mat]
                 traj_idx_alpha = np.random.choice(NUM_SRIM_TRAJ)+1
                 curr_traj_full_alpha = traj_dict_alpha[traj_idx_alpha]
-                shortened_traj_alpha = select_end_of_traj(curr_traj_full_alpha, decay_alpha_energy, True, init_xyz, prior_traj=-shortened_traj)
+                prior_traj_start = np.vstack((shortened_traj[0,:], shortened_traj[1,:]))
+                shortened_traj_alpha = select_end_of_traj(curr_traj_full_alpha, decay_alpha_energy, True, init_xyz, prior_traj=-prior_traj_start)
 
                 ## get the trajectory for the alpha
                 traj_dict_inner_alpha = MC_dict['He-4_' + mat_inner]
