@@ -49,7 +49,7 @@ def parse_decay_chain(file):
 
     return decay_chain_dict
     
-iso_Z_dict = {"Pb": 82, "Fr": 87, "At": 85, "Bi": 83, "Tl": 81, "Ra": 88, "Rn": 86, "Po": 84, "He": 4}
+iso_Z_dict = {"Pb": 82, "Fr": 87, "At": 85, "Bi": 83, "Tl": 81, "Ra": 88, "Rn": 86, "Po": 84, "He": 2}
 
 def get_Z_A_for_iso(iso):
     symbol = iso[:2]
