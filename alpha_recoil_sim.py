@@ -19,7 +19,6 @@ def parse_decay_chain(file):
         if line[0] == "#": continue
     
         if(len(active_iso) == 0): ## case to start a new isotope
-            print(line)
             lineparts = line.strip().split(',')
             iso, t12, alpha_q = lineparts[0], lineparts[1], lineparts[2]
             active_iso = iso
@@ -685,17 +684,19 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[],
             decay_alpha_energy = curr_decay_info[rand_idx,1] ## in keV
             decay_daughter = curr_daughter_info[rand_idx]
             decay_type = curr_type_info[rand_idx]
-            print(decay_type)
             daughter_mass = float(curr_iso.split("-")[-1])
             decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
 
             decay_record['energy'] = decay_NR_energy
             decay_record['iso'] = decay_daughter
 
-            if(decay_alpha_energy == 0): ## this is actually a beta decay, so we won't simulate in detail
+            if(decay_type == 'beta'): ## this is actually a beta decay, so we won't simulate in detail
                 ### update to the new isotope and t12
                 curr_iso = decay_daughter
                 curr_t12 = decay_dict[curr_iso + "_t12"]
+                if(simulate_beta):
+                    ## simple simulation using csda range
+                    decay_record['traj_beta'] = np.array([[0,x,y,z],])                
                 decay_record['traj'] = np.array([[0,x,y,z],])
                 ## save the data
                 event_record[decay_idx] = decay_record
