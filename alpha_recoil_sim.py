@@ -645,7 +645,7 @@ def plot_event_row(event_dict_full, idx_list, sd, rad_lims=[], sphere_coords=Tru
     #plt.tight_layout()
     return fig
 
-def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], 
+def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_point=[], 
                  exterior_mat='vacuum', simulate_alpha=False, simulate_beta=False):
     """ Function to simulate the alpha transport through a sphere
     """
@@ -717,24 +717,71 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[],
 
             rand_idx = np.random.choice(len(curr_daughter_info), p=curr_decay_info[:,0])
 
-            decay_alpha_energy = curr_decay_info[rand_idx,1] ## in keV
-            decay_daughter = curr_daughter_info[rand_idx]
             decay_type = curr_type_info[rand_idx]
             daughter_mass = float(curr_iso.split("-")[-1])
-            decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
 
+            if(decay_type == 'alpha'):
+                decay_alpha_energy = curr_decay_info[rand_idx,1] ## in keV
+                decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
+            elif(decay_type == 'beta'):
+                decay_alpha_energy = 0 ## in keV
+                decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
+                decay_beta_Q = curr_decay_info[rand_idx,1] ## in keV
+
+            decay_daughter = curr_daughter_info[rand_idx]
             decay_record['energy'] = decay_NR_energy
             decay_record['iso'] = decay_daughter
+
+            init_xyz = [x,y,z]
 
             if(decay_type == 'beta'): ## this is actually a beta decay, so we won't simulate in detail
                 ### update to the new isotope and t12
                 curr_iso = decay_daughter
                 curr_t12 = decay_dict[curr_iso + "_t12"]
                 if(simulate_beta):
-                    #decay_record['energy_beta'] = 
+                    Z, A = get_Z_A_for_iso(curr_iso)
+                    E = np.linspace(0,decay_beta_Q,1000)
+                    spec = simple_beta(E, decay_beta_Q, 0, A, Z)
+                    energy_beta = draw_from_pdf(1, E, spec)
+                    decay_record['energy_beta'] = energy_beta
 
-                    ## simple simulation using estar
-                    decay_record['traj_beta'] = np.array([[0,x,y,z],])                
+                    traj_beta = [[energy_beta,x,y,z],]
+                    psi, theta, phi = random_angle_on_sphere() ## euler angles, theta polar, phi azimuthal
+                    dx, dy, dz = np.sin(phi)*np.cos(theta), np.sin(phi)*np.sin(theta), np.cos(theta)
+                    beta_x, beta_y, beta_z = 1.0*x, 1.0*y, 1.0*z
+
+                    curr_energy = 1.0*energy_beta
+                    nsteps = 0
+                    while(curr_energy > 0.001):
+                        
+                        curr_energy = traj_beta[-1][0]
+
+                        curr_rad = np.sqrt(beta_x**2 + beta_y**2 + beta_z**2)
+                        if(curr_rad < r_inner):
+                            curr_mat = mat_inner
+                            dd = r_inner/10 
+                        elif(curr_rad < r_outer):
+                            curr_mat = mat_outer
+                            dd = (r_outer-r_inner)/10
+                        else:
+                            curr_mat = exterior_mat
+                            dd = 10000 ## 10 um step outside
+
+                        interp_func = beta_dict[curr_mat]
+
+                        dE = interp_func(curr_energy)*dd
+                        curr_energy -= dE
+                        if(curr_energy < 0):
+                            curr_energy = 0
+                        beta_x, beta_y, beta_z = beta_x+dx*dd, beta_y+dy*dd, beta_z+dz*dd
+                        traj_beta.append([curr_energy, beta_x, beta_y, beta_z])
+                        print([curr_energy, beta_x, beta_y, beta_z])
+                        print("here: ", traj_beta)
+                        nsteps += 1
+
+                    print("Number of steps: ", nsteps)
+                    decay_record['traj_beta'] = np.array(traj_beta)
+
                 decay_record['traj'] = np.array([[0,x,y,z],])
                 ## save the data
                 event_record[decay_idx] = decay_record
@@ -746,7 +793,6 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[],
             ### get a random trajectory for its recoil
             traj_idx = np.random.choice(NUM_SRIM_TRAJ)+1
             curr_traj_full = traj_dict[traj_idx]
-            init_xyz = [x,y,z]
             shortened_traj = select_end_of_traj(curr_traj_full,decay_NR_energy, False, init_xyz)
 
             ## essentially the alpha leaves with negligible momentum loss, eventually can add a real
