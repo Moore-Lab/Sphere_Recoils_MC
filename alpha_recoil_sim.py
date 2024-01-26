@@ -354,7 +354,7 @@ def plot_sphere(ax, r, c, alph=0.5):
     # plot sphere with transparency
     ax.plot_surface(x, y, z, alpha=alph, color=c)
 
-def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=False):
+def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=False, plot_betas=False):
 
     color_list = ['k', 'r', 'b', 'g', 'c', 'm', 'y', 'orange', 'purple']
     c1_list = [1,2,1]
@@ -409,6 +409,11 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
         else:
             alpha_data = None ## this was a beta or not saved
 
+        if('traj_beta' in event_dict[didx].keys()):
+            beta_data = event_dict[didx]['traj_beta']
+        else:
+            beta_data = None ## this was an alpha or not saved
+
         if(event_dict[didx]['energy']==0): 
             ## this is a beta, so just plot its dot at the same position and go on
             ax3d.scatter(data[-1,1], data[-1,2], data[-1,3], 'o', s=2, c=color_list[idx_for_colors], label=event_dict[didx]['iso'])
@@ -420,6 +425,15 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
                 for j,ax in enumerate(ax2d[:-1]):
                     ax.plot(curr_lost_e[-1], data[-1,j+1], 'o', ms=2, color=color_list[idx_for_colors])
             ax2d[-1].plot(curr_lost_e[-1], rad[-1], 'o', ms=2, color=color_list[idx_for_colors])
+
+            if(plot_betas and beta_data is not None):
+                r_beta = np.sqrt(beta_data[:,1]**2 + beta_data[:,2]**2 + beta_data[:,3]**2)
+                gpts = r_beta < 1e20*rout ## betas go straight so no issue with plotting
+                ax3d.plot3D(beta_data[gpts,1], beta_data[gpts,2], beta_data[gpts,3], c=color_list[idx_for_colors], ls=':')
+
+                if(sphere_coords):
+                    for j,ax in enumerate(ax2d[:-1]):
+                            ax.plot(beta_data[:,c1_list[j]], beta_data[:,c2_list[j]], c=color_list[idx_for_colors], ls=':')
             continue
 
         ## Plot the array in 3D
@@ -461,9 +475,9 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
                 if(plot_alphas and alpha_data is not None):
                     ax.plot(alpha_data[:,c1_list[j]], alpha_data[:,c2_list[j]], c=color_list[idx_for_colors], ls='--')
 
-    ax3d.set_xlim(-rout*1.2, rout*1.2)
-    ax3d.set_ylim(-rout*1.2, rout*1.2)
-    ax3d.set_zlim(-rout*1.2, rout*1.2)
+    #ax3d.set_xlim(-rout*1.2, rout*1.2)
+    #ax3d.set_ylim(-rout*1.2, rout*1.2)
+    #ax3d.set_zlim(-rout*1.2, rout*1.2)
     ax3d.set_xlabel('x [nm]')
     ax3d.set_ylabel('y [nm]')
     ax3d.set_zlabel('z [nm]')
@@ -477,8 +491,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
             c1, c2 = c1_list[j], c2_list[j]
             ax.set_xlabel(col_names[c1-1] + " [nm]")
             ax.set_ylabel(col_names[c2-1] + " [nm]")
-            ax.set_xlim(lims[c1-1][0]-10, lims[c1-1][1]+10 )
-            ax.set_ylim(lims[c2-1][0]-10, lims[c2-1][1]+10 )
+            #ax.set_xlim(lims[c1-1][0]-10, lims[c1-1][1]+10 )
+            #ax.set_ylim(lims[c2-1][0]-10, lims[c2-1][1]+10 )
 
     ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
     ax2d[-1].set_ylabel('Radius [nm]')
@@ -742,7 +756,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
                     Z, A = get_Z_A_for_iso(curr_iso)
                     E = np.linspace(0,decay_beta_Q,1000)
                     spec = simple_beta(E, decay_beta_Q, 0, A, Z)
-                    energy_beta = draw_from_pdf(1, E, spec)
+                    energy_beta = draw_from_pdf(1, E, spec)[0]
                     decay_record['energy_beta'] = energy_beta
 
                     traj_beta = [[energy_beta,x,y,z],]
@@ -775,11 +789,8 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
                             curr_energy = 0
                         beta_x, beta_y, beta_z = beta_x+dx*dd, beta_y+dy*dd, beta_z+dz*dd
                         traj_beta.append([curr_energy, beta_x, beta_y, beta_z])
-                        print([curr_energy, beta_x, beta_y, beta_z])
-                        print("here: ", traj_beta)
                         nsteps += 1
 
-                    print("Number of steps: ", nsteps)
                     decay_record['traj_beta'] = np.array(traj_beta)
 
                 decay_record['traj'] = np.array([[0,x,y,z],])
