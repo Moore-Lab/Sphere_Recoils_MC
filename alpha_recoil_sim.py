@@ -780,7 +780,9 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
                             dd = (r_outer-r_inner)/10
                         else:
                             curr_mat = exterior_mat
-                            dd = 10000 ## 10 um step outside
+                            dd = (r_outer-r_inner)/10 + (curr_rad-r_outer)/1e4 * 1e4 ## grow to 10 um step
+                            if(dd > 1e4):
+                                dd = 1e4
 
                         interp_func = beta_dict[curr_mat]
 
@@ -792,6 +794,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
                         traj_beta.append([curr_energy, beta_x, beta_y, beta_z])
                         nsteps += 1
 
+                    #print(nsteps)
                     decay_record['traj_beta'] = np.array(traj_beta)
 
                 decay_record['traj'] = np.array([[0,x,y,z],])
@@ -1581,3 +1584,67 @@ def plot_transmitted(daught_dict, recoil_dict, event_num, sphere_rad=1500, sim_t
 
     return fig
         
+
+
+def analyze_energy_deposits(sim_dict, bins_to_use=0, sphere_dict=[]):
+    """ Take a simulation dictionary and determine the distribution of energy deposits as a function of radius:
+    """
+
+    nm_to_um = 1e-3
+
+    energy_loss_alpha = []
+    energy_loss_beta = []
+    energy_loss_NR = []
+
+    num_bad_pts = 0
+    N = len(sim_dict.keys())
+    for i in range(1000): #N):
+
+        if(i%1000 == 0): print("Working on event %d of %d"%(i,N))
+
+        curr_event = sim_dict[i]
+        
+        for d in range(len(curr_event.keys())-4):
+            curr_decay = curr_event[d]
+            traj_NR = curr_decay['traj']
+            e_loss = -np.diff(traj_NR[:,0])
+            r = np.sqrt(np.sum(traj_NR[:,1:]**2, axis=1))
+            e_loss_mat = np.vstack((e_loss, r[1:])).T
+
+            if(len(energy_loss_NR) == 0):
+                energy_loss_NR = e_loss_mat
+            else:
+                energy_loss_NR = np.vstack(  (energy_loss_NR, e_loss_mat) )
+
+            if('traj_alpha' in curr_decay.keys()):            
+                traj_alpha = curr_decay['traj_alpha']
+                e_loss = -np.diff(traj_alpha[:,0])
+                r = np.sqrt(np.sum(traj_alpha[:,1:]**2, axis=1))
+                e_loss_mat = np.vstack((e_loss, r[1:])).T
+
+                if(len(energy_loss_alpha) == 0):
+                    energy_loss_alpha = e_loss_mat
+                else:
+                    energy_loss_alpha = np.vstack(  (energy_loss_alpha, e_loss_mat) )
+
+            if('traj_beta' in curr_decay.keys()):    
+                traj_beta = curr_decay['traj_beta']
+                e_loss = -np.diff(traj_beta[:,0])
+                r = np.sqrt(np.sum(traj_beta[:,1:]**2, axis=1))
+                e_loss_mat = np.vstack((e_loss, r[1:])).T
+
+                if(len(energy_loss_beta) == 0):
+                    energy_loss_beta = e_loss_mat
+                else:
+                    energy_loss_beta = np.vstack(  (energy_loss_beta, e_loss_mat) )
+
+    h_NR, be = np.histogram(energy_loss_NR[:,1], bins=bins_to_use, weights=energy_loss_NR[:,0])
+    h_alpha, be = np.histogram(energy_loss_alpha[:,1], bins=bins_to_use, weights=energy_loss_alpha[:,0])
+    h_beta, be = np.histogram(energy_loss_beta[:,1], bins=bins_to_use, weights=energy_loss_beta[:,0])
+
+    bc = be[:-1] + np.diff(be)/2
+
+    volume = 4/3*np.pi*( be[1:]**3 - be[:-1]**3 ) * nm_to_um**3
+    norm_fac = 1/(N * volume)
+
+    return h_NR*norm_fac, h_alpha*norm_fac, h_beta*norm_fac, bc
