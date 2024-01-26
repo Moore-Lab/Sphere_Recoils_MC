@@ -2,9 +2,13 @@
 import numpy as np
 import matplotlib.pyplot as plt
 import pickle
+from scipy.special import gamma
 
 ## conversions of hours, days, years to seconds
 seconds_dict = {"s": 1, "m": 60, "h": 3600, "d": 3600*24, "y": 3600*24*365.24} 
+me = 511 #electron mass in keV
+alpha = 1/137.036 ## fine structure constant
+R0 = 1.03e6 ## nuclear radius [keV]
 
 def parse_decay_chain(file):
 
@@ -61,6 +65,38 @@ def get_Z_A_for_iso(iso):
 
     return Z, A
 
+def fermi_func(A, Z, E):
+  ## Z should be positive for beta minus decay
+  gpts = E > 0
+  f = np.zeros_like(E)
+  R = R0 * A**(1/3)
+  Et = E[gpts] + me
+  p = np.sqrt( (Et)**2 - me**2 )
+  eval = 2*(np.sqrt(1 - alpha**2 * Z**2)-1)
+  gam = np.abs( gamma(np.sqrt(1 - alpha**2 * Z**2) + 1j* alpha * Z * Et/p ) )**2 / gamma(2*np.sqrt(1-alpha**2 * Z**2) + 1)**2
+  f[gpts] = 2*(1 + np.sqrt(1-alpha**2 * Z**2) ) * (2*p*R)**eval * np.exp(np.pi*alpha*Z*Et/p) * gam
+  return f
+
+def simple_beta(E, Q, ms, A, Z):
+  #return a simple spectrum of counts vs electron KE
+  ## assumes E in keV
+  ## Q is Q value in keV
+  ## ms is nu mass in keV
+  N = np.zeros_like(E)
+  gpts = E < Q-ms
+  N[gpts] = np.sqrt(E[gpts]**2 + 2*E[gpts]*me)*(E[gpts] + me)*np.sqrt((Q-E[gpts])**2 - ms**2)*(Q-E[gpts])
+  ff = fermi_func(A, Z+1, E) ## Z+1 for the daughter 
+  out = N*ff
+  out[np.isnan(out)] = 0
+  out[np.isinf(out)] = 0
+  return out
+
+def draw_from_pdf(n, pdf_x, pdf_p):
+  ## function to draw n values from a PDF
+  cdf = np.cumsum(pdf_p)
+  cdf /= np.max(cdf)
+  rv = np.random.rand(n)
+  return np.interp(rv, cdf, pdf_x)
 
 def random_point_in_sphere(radius):
     # Generate random coordinates in the sphere with given radius (thanks ChatGPT!)
@@ -695,7 +731,9 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[],
                 curr_iso = decay_daughter
                 curr_t12 = decay_dict[curr_iso + "_t12"]
                 if(simulate_beta):
-                    ## simple simulation using csda range
+                    #decay_record['energy_beta'] = 
+
+                    ## simple simulation using estar
                     decay_record['traj_beta'] = np.array([[0,x,y,z],])                
                 decay_record['traj'] = np.array([[0,x,y,z],])
                 ## save the data
