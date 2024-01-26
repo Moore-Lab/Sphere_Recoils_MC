@@ -19,7 +19,9 @@ def parse_decay_chain(file):
         if line[0] == "#": continue
     
         if(len(active_iso) == 0): ## case to start a new isotope
-            iso, t12, alpha_q = line.strip().split(',')
+            print(line)
+            lineparts = line.strip().split(',')
+            iso, t12, alpha_q = lineparts[0], lineparts[1], lineparts[2]
             active_iso = iso
             
             t12_num = float(t12[:-1]) * seconds_dict[t12[-1]] ## convert all half lives to seconds
@@ -30,6 +32,7 @@ def parse_decay_chain(file):
             
             decay_options = []
             decay_daughters = []
+            decay_type = []
 
         else: ## case to assemble decay possibilities
 
@@ -40,12 +43,13 @@ def parse_decay_chain(file):
                 decay_options[-1,0] += missing_prob
                 decay_chain_dict[active_iso + "_decays"] = decay_options
                 decay_chain_dict[active_iso + "_daughters"] = decay_daughters
+                decay_chain_dict[active_iso + "_type"] = decay_type
                 active_iso = ""
             else: ## add another decay option
                 parts = line.strip().split(',')
                 decay_options.append( [float(parts[0]), float(parts[1])] )
                 decay_daughters.append(parts[2].strip())
-
+                decay_type.append(parts[3].strip())
 
     return decay_chain_dict
     
@@ -396,7 +400,10 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
 
 
         if(plot_alphas and alpha_data is not None):
-            ax3d.plot3D(alpha_data[:,1], alpha_data[:,2], alpha_data[:,3], c=color_list[idx_for_colors], ls=':')
+            r_alpha = np.sqrt(alpha_data[:,1]**2 + alpha_data[:,2]**2 + alpha_data[:,3]**2)
+            gpts = r_alpha < 10*rout ## some of the alphas eventually loop back through the 3D view
+                                    ## and make the plots confusing
+            ax3d.plot3D(alpha_data[gpts,1], alpha_data[gpts,2], alpha_data[gpts,3], c=color_list[idx_for_colors], ls='--')
 
         ## now plot the radius
         rad = np.sqrt( data[:,1]**2 + data[:,2]**2 + data[:,3]**2 )
@@ -417,7 +424,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
         if(sphere_coords):
             for j,ax in enumerate(ax2d[:-1]):
                 if(plot_alphas and alpha_data is not None):
-                    ax.plot(alpha_data[:,c1_list[j]], alpha_data[:,c2_list[j]], c=color_list[idx_for_colors], ls=':')
+                    ax.plot(alpha_data[:,c1_list[j]], alpha_data[:,c2_list[j]], c=color_list[idx_for_colors], ls='--')
 
     ax3d.set_xlim(-rout*1.2, rout*1.2)
     ax3d.set_ylim(-rout*1.2, rout*1.2)
@@ -435,8 +442,6 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
             c1, c2 = c1_list[j], c2_list[j]
             ax.set_xlabel(col_names[c1-1] + " [nm]")
             ax.set_ylabel(col_names[c2-1] + " [nm]")
-            #ax.set_xlim(-rout*1.2, rout*1.2)
-            #ax.set_ylim(-rout*1.2, rout*1.2)
             ax.set_xlim(lims[c1-1][0]-10, lims[c1-1][1]+10 )
             ax.set_ylim(lims[c2-1][0]-10, lims[c2-1][1]+10 )
 
@@ -451,7 +456,7 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
         if(rad_lims[0] > 0):
             ax2d[-1].set_ylim(rad_lims[0], rad_lims[1])
     ax2d[-1].set_xlim(-0.01*xm, xm)
-    #ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
+    ax2d[-1].plot([0, xm],[rin, rin], color=inner_sphere_color)
     ax2d[-1].plot([0, xm],[rout, rout], color=outer_sphere_color)
 
     plot_sphere(ax3d, rin, inner_sphere_color)
@@ -605,7 +610,8 @@ def plot_event_row(event_dict_full, idx_list, sd, rad_lims=[], sphere_coords=Tru
     #plt.tight_layout()
     return fig
 
-def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], exterior_mat='vacuum', simulate_alpha=False):
+def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], 
+                 exterior_mat='vacuum', simulate_alpha=False, simulate_beta=False):
     """ Function to simulate the alpha transport through a sphere
     """
 
@@ -672,18 +678,21 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, start_point=[], exter
             ### find the daughter that recoils and its starting energy
             curr_decay_info = decay_dict[curr_iso + "_decays"]
             curr_daughter_info = decay_dict[curr_iso + "_daughters"]
+            curr_type_info = decay_dict[curr_iso + "_type"]
 
             rand_idx = np.random.choice(len(curr_daughter_info), p=curr_decay_info[:,0])
 
             decay_alpha_energy = curr_decay_info[rand_idx,1] ## in keV
             decay_daughter = curr_daughter_info[rand_idx]
+            decay_type = curr_type_info[rand_idx]
+            print(decay_type)
             daughter_mass = float(curr_iso.split("-")[-1])
             decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
 
             decay_record['energy'] = decay_NR_energy
             decay_record['iso'] = decay_daughter
 
-            if(decay_alpha_energy == 0): ## this is actually a beta decay, so we don't need to simulate anything
+            if(decay_alpha_energy == 0): ## this is actually a beta decay, so we won't simulate in detail
                 ### update to the new isotope and t12
                 curr_iso = decay_daughter
                 curr_t12 = decay_dict[curr_iso + "_t12"]
