@@ -749,11 +749,11 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
 
             init_xyz = [x,y,z]
 
-            if(decay_type == 'beta'): ## this is actually a beta decay, so we won't simulate in detail
+            if(decay_type == 'beta' or decay_type=='EC'): ## this is actually a beta decay, so we won't simulate in detail
                 ### update to the new isotope and t12
                 curr_iso = decay_daughter
                 curr_t12 = decay_dict[curr_iso + "_t12"]
-                if(simulate_beta):
+                if(simulate_beta and decay_type == 'beta'):
                     Z, A = get_Z_A_for_iso(curr_iso)
                     E = np.linspace(0,decay_beta_Q,1000)
                     spec = simple_beta(E, decay_beta_Q, 0, A, Z)
