@@ -428,7 +428,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
 
             if(plot_betas and beta_data is not None):
                 r_beta = np.sqrt(beta_data[:,1]**2 + beta_data[:,2]**2 + beta_data[:,3]**2)
-                gpts = r_beta < 1e20*rout ## betas go straight so no issue with plotting
+                gpts = r_beta < 10*rout ## some of the betas eventually loop back through the 3D view
+                                        ## and make the plots confusing
                 ax3d.plot3D(beta_data[gpts,1], beta_data[gpts,2], beta_data[gpts,3], c=color_list[idx_for_colors], ls=':')
 
                 if(sphere_coords):
@@ -475,9 +476,9 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
                 if(plot_alphas and alpha_data is not None):
                     ax.plot(alpha_data[:,c1_list[j]], alpha_data[:,c2_list[j]], c=color_list[idx_for_colors], ls='--')
 
-    #ax3d.set_xlim(-rout*1.2, rout*1.2)
-    #ax3d.set_ylim(-rout*1.2, rout*1.2)
-    #ax3d.set_zlim(-rout*1.2, rout*1.2)
+    ax3d.set_xlim(-rout*1.2, rout*1.2)
+    ax3d.set_ylim(-rout*1.2, rout*1.2)
+    ax3d.set_zlim(-rout*1.2, rout*1.2)
     ax3d.set_xlabel('x [nm]')
     ax3d.set_ylabel('y [nm]')
     ax3d.set_zlabel('z [nm]')
@@ -491,8 +492,8 @@ def plot_event(event_dict, sd, rad_lims=[], sphere_coords=True, plot_alphas=Fals
             c1, c2 = c1_list[j], c2_list[j]
             ax.set_xlabel(col_names[c1-1] + " [nm]")
             ax.set_ylabel(col_names[c2-1] + " [nm]")
-            #ax.set_xlim(lims[c1-1][0]-10, lims[c1-1][1]+10 )
-            #ax.set_ylim(lims[c2-1][0]-10, lims[c2-1][1]+10 )
+            ax.set_xlim(lims[c1-1][0]-10, lims[c1-1][1]+10 )
+            ax.set_ylim(lims[c2-1][0]-10, lims[c2-1][1]+10 )
 
     ax2d[-1].set_xlabel('Cumulative energy loss [keV]')
     ax2d[-1].set_ylabel('Radius [nm]')
