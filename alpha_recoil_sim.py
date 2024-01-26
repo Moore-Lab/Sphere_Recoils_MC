@@ -738,7 +738,7 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
             if(decay_type == 'alpha'):
                 decay_alpha_energy = curr_decay_info[rand_idx,1] ## in keV
                 decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
-            elif(decay_type == 'beta'):
+            elif(decay_type == 'beta' or decay_type=='EC'):
                 decay_alpha_energy = 0 ## in keV
                 decay_NR_energy = decay_alpha_energy * alpha_mass/daughter_mass
                 decay_beta_Q = curr_decay_info[rand_idx,1] ## in keV
@@ -1629,6 +1629,7 @@ def analyze_energy_deposits(sim_dict, bins_to_use=0, sphere_dict=[]):
 
             if('traj_beta' in curr_decay.keys()):    
                 traj_beta = curr_decay['traj_beta']
+                if(traj_beta[0,0] == 0): continue
                 e_loss = -np.diff(traj_beta[:,0])
                 r = np.sqrt(np.sum(traj_beta[:,1:]**2, axis=1))
                 e_loss_mat = np.vstack((e_loss, r[1:])).T
@@ -1640,7 +1641,10 @@ def analyze_energy_deposits(sim_dict, bins_to_use=0, sphere_dict=[]):
 
     h_NR, be = np.histogram(energy_loss_NR[:,1], bins=bins_to_use, weights=energy_loss_NR[:,0])
     h_alpha, be = np.histogram(energy_loss_alpha[:,1], bins=bins_to_use, weights=energy_loss_alpha[:,0])
-    h_beta, be = np.histogram(energy_loss_beta[:,1], bins=bins_to_use, weights=energy_loss_beta[:,0])
+    if(len(energy_loss_beta)>0):
+        h_beta, be = np.histogram(energy_loss_beta[:,1], bins=bins_to_use, weights=energy_loss_beta[:,0])
+    else:
+        h_beta = 0
 
     bc = be[:-1] + np.diff(be)/2
 
