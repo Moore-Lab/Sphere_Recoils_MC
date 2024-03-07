@@ -661,12 +661,15 @@ def plot_event_row(event_dict_full, idx_list, sd, rad_lims=[], sphere_coords=Tru
     return fig
 
 def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_point=[], 
-                 exterior_mat='vacuum', simulate_alpha=False, simulate_beta=False):
+                 exterior_mat='vacuum', simulate_alpha=False, simulate_beta=False, seed=0):
     """ Function to simulate the alpha transport through a sphere
     """
 
     NUM_SRIM_TRAJ = 9999 ## number of simulated trajectories for each ion type
     alpha_mass = 4 ## mass of alpha particle in AMU
+
+    if(seed > 0):
+        np.random.seed(seed)
 
     ## construct sphere materials and parameters
     r_inner = sphere_dict['inner_radius']
@@ -698,6 +701,9 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
                 curr_mat = mat_inner
             elif(sphere_dict["starting_loc"] == "core"):
                 x, y, z = random_point_in_sphere(r_inner)
+                curr_mat = mat_inner
+            elif(sphere_dict["starting_loc"] == "core_surface"):
+                x, y, z = random_point_on_surface(r_inner - 0.1)
                 curr_mat = mat_inner
             elif(sphere_dict["starting_loc"] == "shell"):
                 x, y, z = random_point_on_surface(r_inner + sphere_dict['outer_shell_thick'] - 1) ## 1 nm from surface
@@ -756,46 +762,48 @@ def sim_N_events(nmc, iso, iso_dict, sphere_dict, MC_dict, beta_dict={}, start_p
                 if(simulate_beta and decay_type == 'beta'):
                     Z, A = get_Z_A_for_iso(curr_iso)
                     E = np.linspace(0,decay_beta_Q,1000)
+
                     spec = simple_beta(E, decay_beta_Q, 0, A, Z)
                     energy_beta = draw_from_pdf(1, E, spec)[0]
                     decay_record['energy_beta'] = energy_beta
 
-                    traj_beta = [[energy_beta,x,y,z],]
-                    psi, theta, phi = random_angle_on_sphere() ## euler angles, theta polar, phi azimuthal
-                    dx, dy, dz = np.sin(phi)*np.cos(theta), np.sin(phi)*np.sin(theta), np.cos(theta)
+                    traj_beta = [[energy_beta,1.0*x,1.0*y,1.0*z],]
+                    psib, thetab, phib = random_angle_on_sphere() ## euler angles, theta polar, phi azimuthal
+                    dxb, dyb, dzb = np.sin(phib)*np.cos(thetab), np.sin(phib)*np.sin(thetab), np.cos(thetab)
                     beta_x, beta_y, beta_z = 1.0*x, 1.0*y, 1.0*z
 
-                    curr_energy = 1.0*energy_beta
+                    curr_energy_beta = 1.0*energy_beta
                     nsteps = 0
-                    while(curr_energy > 0.001):
-                        
-                        curr_energy = traj_beta[-1][0]
 
-                        curr_rad = np.sqrt(beta_x**2 + beta_y**2 + beta_z**2)
-                        if(curr_rad < r_inner):
-                            curr_mat = mat_inner
+                    while(curr_energy_beta > 0.001):
+                            
+                        curr_energy_beta = traj_beta[-1][0]
+
+                        curr_rad_beta = np.sqrt(beta_x**2 + beta_y**2 + beta_z**2)
+                        if(curr_rad_beta < r_inner):
+                            curr_mat_beta = mat_inner
                             dd = r_inner/10 
-                        elif(curr_rad < r_outer):
-                            curr_mat = mat_outer
+                        elif(curr_rad_beta < r_outer):
+                            curr_mat_beta = mat_outer
                             dd = (r_outer-r_inner)/10
                         else:
-                            curr_mat = exterior_mat
-                            dd = (r_outer-r_inner)/10 + (curr_rad-r_outer)/1e4 * 1e4 ## grow to 10 um step
+                            curr_mat_beta = exterior_mat
+                            dd = (r_outer-r_inner)/10 + (curr_rad_beta-r_outer)/1e4 * 1e4 ## grow to 10 um step
                             if(dd > 1e4):
                                 dd = 1e4
 
-                        interp_func = beta_dict[curr_mat]
+                        interp_func = beta_dict[curr_mat_beta]
 
-                        dE = interp_func(curr_energy)*dd
-                        curr_energy -= dE
-                        if(curr_energy < 0):
-                            curr_energy = 0
-                        beta_x, beta_y, beta_z = beta_x+dx*dd, beta_y+dy*dd, beta_z+dz*dd
-                        traj_beta.append([curr_energy, beta_x, beta_y, beta_z])
+                        dE = interp_func(curr_energy_beta)*dd
+                        curr_energy_beta -= dE
+                        if(curr_energy_beta < 0):
+                            curr_energy_beta = 0
+                        beta_x, beta_y, beta_z = beta_x+dxb*dd, beta_y+dyb*dd, beta_z+dzb*dd
+                        traj_beta.append([curr_energy_beta, beta_x, beta_y, beta_z])
                         nsteps += 1
 
                     #print(nsteps)
-                    decay_record['traj_beta'] = np.array(traj_beta)
+                    #decay_record['traj_beta'] = np.array(traj_beta)
 
                 decay_record['traj'] = np.array([[0,x,y,z],])
                 ## save the data
@@ -1598,7 +1606,7 @@ def analyze_energy_deposits(sim_dict, bins_to_use=0, sphere_dict=[]):
 
     num_bad_pts = 0
     N = len(sim_dict.keys())
-    for i in range(1000): #N):
+    for i in range(N):
 
         if(i%1000 == 0): print("Working on event %d of %d"%(i,N))
 
@@ -1651,4 +1659,4 @@ def analyze_energy_deposits(sim_dict, bins_to_use=0, sphere_dict=[]):
     volume = 4/3*np.pi*( be[1:]**3 - be[:-1]**3 ) * nm_to_um**3
     norm_fac = 1/(N * volume)
 
-    return h_NR*norm_fac, h_alpha*norm_fac, h_beta*norm_fac, bc
+    return h_NR*norm_fac, h_alpha*norm_fac, h_beta*norm_fac, bc, volume
